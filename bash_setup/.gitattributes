@@ -1,0 +1,7 @@
+* text=auto
+.bash_profile text eol=lf
+.bashrc text eol=lf
+*.bash text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.ps1 text eol=crlf
