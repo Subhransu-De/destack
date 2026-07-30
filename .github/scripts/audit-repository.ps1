@@ -106,7 +106,10 @@ try {
         Write-Host "Auditing $($stagedPaths.Count) exact staged blobs..."
 
         foreach ($path in $changedPaths) {
-            if ($path -notmatch '^(\.github|bash_setup|windows_terminal)/') {
+            if (
+                $path -ne 'AGENTS.md' -and
+                $path -notmatch '^(\.github|bash_setup|windows_terminal)/'
+            ) {
                 Add-Finding $findings 'Top-level scope violation' $path '-'
             }
 
@@ -204,7 +207,10 @@ try {
                     Add-Finding $findings "Disallowed Git mode $mode" $path '-'
                 }
 
-                if ($path -notmatch '^(\.github|bash_setup|windows_terminal)/') {
+                if (
+                    $path -ne 'AGENTS.md' -and
+                    $path -notmatch '^(\.github|bash_setup|windows_terminal)/'
+                ) {
                     Add-Finding $findings 'Top-level scope violation' $path '-'
                 }
 
