@@ -60,9 +60,9 @@ agent_up() {
 }
 
 alias ca='cursor-agent'
-alias cc='claude --allow-dangerously-skip-permissions'
+alias cc='claude'
 alias ccr='cc --resume'
-alias cxl='codex -m gpt-5.6-sol -c model_reasoning_effort="low"'
+alias cxl='codex -m gpt-5.6-luna -c model_reasoning_effort="xhigh"'
 alias cxm='codex -m gpt-5.6-sol -c model_reasoning_effort="medium"'
 alias cx='codex -m gpt-5.6-sol -c model_reasoning_effort="high"'
 alias cxr='cx resume'
