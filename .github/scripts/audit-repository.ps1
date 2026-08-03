@@ -107,8 +107,8 @@ try {
 
         foreach ($path in $changedPaths) {
             if (
-                $path -ne 'AGENTS.md' -and
-                $path -notmatch '^(\.github|bash_setup|windows_terminal)/'
+                $path -notin @('AGENTS.md', 'CLAUDE.md') -and
+                $path -notmatch '^(\.github|bash_setup|claude|windows_terminal)/'
             ) {
                 Add-Finding $findings 'Top-level scope violation' $path '-'
             }
@@ -208,8 +208,8 @@ try {
                 }
 
                 if (
-                    $path -ne 'AGENTS.md' -and
-                    $path -notmatch '^(\.github|bash_setup|windows_terminal)/'
+                    $path -notin @('AGENTS.md', 'CLAUDE.md') -and
+                    $path -notmatch '^(\.github|bash_setup|claude|windows_terminal)/'
                 ) {
                     Add-Finding $findings 'Top-level scope violation' $path '-'
                 }
