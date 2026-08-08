@@ -146,6 +146,17 @@ try {
 
         Write-Host "Auditing $($commitIds.Count) reachable commits..."
 
+        # GitHub checks out a synthetic merge commit for pull requests. Its
+        # generated metadata is not part of the repository history being
+        # audited, so exclude that one CI-only commit from the history scan.
+        if (
+            $env:GITHUB_REF -match '^refs/pull/\d+/merge$' -and
+            -not [string]::IsNullOrWhiteSpace($env:GITHUB_SHA)
+        ) {
+            $commitIds = @($commitIds | Where-Object { $_ -ne $env:GITHUB_SHA })
+            Write-Host "Excluded the synthetic pull-request merge commit from the audit."
+        }
+
         $allowedEmailPatterns = @(
             '^[0-9]+\+[^@]+@users\.noreply\.github\.com$',
             '^[^@]+@users\.noreply\.github\.com$',
@@ -382,6 +393,13 @@ try {
         $bytes = Get-GitObjectBytes -RepoRoot $repoRoot -ObjectId $blobId
         $paths = @($blobPaths[$blobId] | Sort-Object)
         $displayPath = $paths -join ','
+        $allPathsAreDependabotConfig = (
+            $paths.Count -gt 0 -and
+            @(
+                $paths |
+                    Where-Object { $_ -match '^\.github/dependabot\.ya?ml$' }
+            ).Count -eq $paths.Count
+        )
 
         if ($bytes -contains 0) {
             Add-Finding $findings 'Binary historical blob' $displayPath '-'
@@ -395,7 +413,44 @@ try {
             continue
         }
 
+        $lines = @($content -split "`r?`n")
+        $configIdentityValues = @()
+        if ($allPathsAreDependabotConfig) {
+            $inAssignmentList = $false
+            foreach ($configLine in $lines) {
+                if ($configLine -match '^\s*(assignees|reviewers):\s*$') {
+                    $inAssignmentList = $true
+                    continue
+                }
+
+                if ($inAssignmentList) {
+                    if (
+                        $configLine -match '^\s*-\s*["'']?([A-Za-z0-9][A-Za-z0-9-]*)["'']?\s*$'
+                    ) {
+                        $configIdentityValues += $Matches[1]
+                        continue
+                    }
+
+                    if (
+                        $configLine -notmatch '^\s*$' -and
+                        $configLine -notmatch '^\s*-\s*'
+                    ) {
+                        $inAssignmentList = $false
+                    }
+                }
+            }
+
+            $configIdentityValues = $configIdentityValues | Sort-Object -Unique
+        }
+
         foreach ($value in $exactValues) {
+            if (
+                $allPathsAreDependabotConfig -and
+                $value -in $configIdentityValues
+            ) {
+                continue
+            }
+
             if (
                 $displayPath.IndexOf(
                     $value,
@@ -410,7 +465,6 @@ try {
             }
         }
 
-        $lines = @($content -split "`r?`n")
         for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
             $line = $lines[$lineIndex]
 
