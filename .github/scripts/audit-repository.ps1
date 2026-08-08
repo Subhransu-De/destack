@@ -81,6 +81,174 @@ function Add-Finding {
         })
 }
 
+function Find-YamlQuotedScalarEnd {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Text,
+
+        [Parameter(Mandatory)]
+        [char]$Quote,
+
+        [int]$StartIndex = 0
+    )
+
+    for ($index = $StartIndex; $index -lt $Text.Length; $index++) {
+        if ($Quote -eq [char]34 -and $Text[$index] -eq [char]92) {
+            $index++
+            continue
+        }
+
+        if ($Text[$index] -ne $Quote) {
+            continue
+        }
+
+        if (
+            $Quote -eq [char]39 -and
+            $index + 1 -lt $Text.Length -and
+            $Text[$index + 1] -eq $Quote
+        ) {
+            $index++
+            continue
+        }
+
+        return $index
+    }
+
+    return -1
+}
+
+function Get-YamlUnclosedQuotedScalar {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    $searchIndex = 0
+    $quotedScalarPattern = '(?:^|[\[\{,:])\s*(?:(?:![^\s,\[\]\{\}]*|&[^\s,\[\]\{\}]+)\s+)*(["''])'
+
+    while ($searchIndex -lt $Text.Length) {
+        $openingQuote = [regex]::Match(
+            $Text,
+            $quotedScalarPattern,
+            $searchIndex
+        )
+        if (-not $openingQuote.Success) {
+            return $null
+        }
+
+        $quote = $openingQuote.Groups[1].Value[0]
+        $closingQuoteIndex = Find-YamlQuotedScalarEnd -Text $Text -Quote $quote -StartIndex ($openingQuote.Groups[1].Index + 1)
+        if ($closingQuoteIndex -lt 0) {
+            return $quote
+        }
+
+        $searchIndex = $closingQuoteIndex + 1
+    }
+
+    return $null
+}
+
+function Find-YamlCommentStart {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Text,
+
+        [int]$StartIndex = 0
+    )
+
+    for ($index = $StartIndex; $index -lt $Text.Length; $index++) {
+        if (
+            $Text[$index] -eq [char]35 -and
+            ($index -eq 0 -or [char]::IsWhiteSpace($Text[$index - 1]))
+        ) {
+            return $index
+        }
+    }
+
+    return -1
+}
+
+function Remove-YamlComment {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    $searchIndex = 0
+    $quotedScalarPattern = '(?:^|[\[\{,:])\s*(?:(?:![^\s,\[\]\{\}]*|&[^\s,\[\]\{\}]+)\s+)*(["''])'
+
+    while ($searchIndex -lt $Text.Length) {
+        $commentIndex = Find-YamlCommentStart -Text $Text -StartIndex $searchIndex
+        $openingQuote = [regex]::Match($Text, $quotedScalarPattern, $searchIndex)
+
+        if (
+            $commentIndex -ge 0 -and
+            (-not $openingQuote.Success -or $commentIndex -lt $openingQuote.Groups[1].Index)
+        ) {
+            return $Text.Substring(0, $commentIndex).TrimEnd()
+        }
+
+        if (-not $openingQuote.Success) {
+            return $Text
+        }
+
+        $quote = $openingQuote.Groups[1].Value[0]
+        $closingQuoteIndex = Find-YamlQuotedScalarEnd -Text $Text -Quote $quote -StartIndex ($openingQuote.Groups[1].Index + 1)
+        if ($closingQuoteIndex -lt 0) {
+            return $Text
+        }
+
+        $searchIndex = $closingQuoteIndex + 1
+    }
+
+    return $Text
+}
+
+function Get-YamlFlowCollectionDepthDelta {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    $depthDelta = 0
+    $searchIndex = 0
+    $quotedScalarPattern = '(?:^|[\[\{,:])\s*(?:(?:![^\s,\[\]\{\}]*|&[^\s,\[\]\{\}]+)\s+)*(["''])'
+
+    while ($searchIndex -lt $Text.Length) {
+        $openingQuote = [regex]::Match($Text, $quotedScalarPattern, $searchIndex)
+        $scanEnd = if ($openingQuote.Success) {
+            $openingQuote.Groups[1].Index
+        } else {
+            $Text.Length
+        }
+
+        for ($index = $searchIndex; $index -lt $scanEnd; $index++) {
+            if ($Text[$index] -in @([char]91, [char]123)) {
+                $depthDelta++
+            } elseif ($Text[$index] -in @([char]93, [char]125)) {
+                $depthDelta--
+            }
+        }
+
+        if (-not $openingQuote.Success) {
+            break
+        }
+
+        $quote = $openingQuote.Groups[1].Value[0]
+        $closingQuoteIndex = Find-YamlQuotedScalarEnd -Text $Text -Quote $quote -StartIndex ($openingQuote.Groups[1].Index + 1)
+        if ($closingQuoteIndex -lt 0) {
+            break
+        }
+        $searchIndex = $closingQuoteIndex + 1
+    }
+
+    return $depthDelta
+}
+
 $repoRoot = (& git rev-parse --show-toplevel 2>$null).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $repoRoot) {
     throw 'Repository audit must run inside a Git repository.'
@@ -146,15 +314,15 @@ try {
 
         Write-Host "Auditing $($commitIds.Count) reachable commits..."
 
-        # GitHub checks out a synthetic merge commit for pull requests. Its
-        # generated metadata is not part of the repository history being
-        # audited, so exclude that one CI-only commit from the history scan.
+        # GitHub checks out a synthetic merge commit for pull requests. Keep
+        # its tree in the blob audit, but skip only its generated metadata.
+        $syntheticMergeCommitId = $null
         if (
             $env:GITHUB_REF -match '^refs/pull/\d+/merge$' -and
             -not [string]::IsNullOrWhiteSpace($env:GITHUB_SHA)
         ) {
-            $commitIds = @($commitIds | Where-Object { $_ -ne $env:GITHUB_SHA })
-            Write-Host "Excluded the synthetic pull-request merge commit from the audit."
+            $syntheticMergeCommitId = $env:GITHUB_SHA
+            Write-Host "Skipping metadata checks for the synthetic pull-request merge commit while auditing its tree."
         }
 
         $allowedEmailPatterns = @(
@@ -169,38 +337,40 @@ try {
                 throw "Unable to read commit '$commitId'."
             }
 
-            if ($rawCommit -match '(?m)^gpgsig ') {
-                Add-Finding $findings 'Embedded commit signature' $commitId.Substring(0, 12) '-'
-            }
-
-            foreach ($headerName in @('author', 'committer')) {
-                $header = [regex]::Match(
-                    $rawCommit,
-                    "(?m)^$headerName .+ <([^>]+)> \d+ ([+-]\d{4})\r?$"
-                )
-
-                if (-not $header.Success) {
-                    Add-Finding $findings "Malformed $headerName metadata" $commitId.Substring(0, 12) '-'
-                    continue
+            if ($commitId -ne $syntheticMergeCommitId) {
+                if ($rawCommit -match '(?m)^gpgsig ') {
+                    Add-Finding $findings 'Embedded commit signature' $commitId.Substring(0, 12) '-'
                 }
 
-                $email = $header.Groups[1].Value
-                $timezone = $header.Groups[2].Value
-                $emailAllowed = $false
+                foreach ($headerName in @('author', 'committer')) {
+                    $header = [regex]::Match(
+                        $rawCommit,
+                        "(?m)^$headerName .+ <([^>]+)> \d+ ([+-]\d{4})\r?$"
+                    )
 
-                foreach ($pattern in $allowedEmailPatterns) {
-                    if ($email -match $pattern) {
-                        $emailAllowed = $true
-                        break
+                    if (-not $header.Success) {
+                        Add-Finding $findings "Malformed $headerName metadata" $commitId.Substring(0, 12) '-'
+                        continue
                     }
-                }
 
-                if (-not $emailAllowed) {
-                    Add-Finding $findings "Non-noreply $headerName email" $commitId.Substring(0, 12) '-'
-                }
+                    $email = $header.Groups[1].Value
+                    $timezone = $header.Groups[2].Value
+                    $emailAllowed = $false
 
-                if ($timezone -ne '+0000') {
-                    Add-Finding $findings "Non-UTC $headerName timezone" $commitId.Substring(0, 12) '-'
+                    foreach ($pattern in $allowedEmailPatterns) {
+                        if ($email -match $pattern) {
+                            $emailAllowed = $true
+                            break
+                        }
+                    }
+
+                    if (-not $emailAllowed) {
+                        Add-Finding $findings "Non-noreply $headerName email" $commitId.Substring(0, 12) '-'
+                    }
+
+                    if ($timezone -ne '+0000') {
+                        Add-Finding $findings "Non-UTC $headerName timezone" $commitId.Substring(0, 12) '-'
+                    }
                 }
             }
 
@@ -397,7 +567,7 @@ try {
             $paths.Count -gt 0 -and
             @(
                 $paths |
-                    Where-Object { $_ -match '^\.github/dependabot\.ya?ml$' }
+                    Where-Object { $_ -ceq '.github/dependabot.yml' }
             ).Count -eq $paths.Count
         )
 
@@ -414,41 +584,223 @@ try {
         }
 
         $lines = @($content -split "`r?`n")
-        $configIdentityValues = @()
+        $assignmentSpansByLineIndex = @{}
         if ($allPathsAreDependabotConfig) {
+            $githubHandle = '[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}'
+            $githubHandleScalar = '(?:"(' + $githubHandle + ')"|''(' + $githubHandle + ')''|(' + $githubHandle + '))'
+            $inUpdatesList = $false
+            $inUpdateEntry = $false
             $inAssignmentList = $false
-            foreach ($configLine in $lines) {
-                if ($configLine -match '^\s*(assignees|reviewers):\s*$') {
+            $blockScalarIndent = $null
+            $quotedScalarQuote = $null
+            $flowCollectionDepth = 0
+            for ($configLineIndex = 0; $configLineIndex -lt $lines.Count; $configLineIndex++) {
+                $configLine = $lines[$configLineIndex]
+
+                if ($null -ne $quotedScalarQuote) {
+                    $closingQuoteIndex = Find-YamlQuotedScalarEnd -Text $configLine -Quote $quotedScalarQuote
+                    if ($closingQuoteIndex -ge 0) {
+                        $remainingSyntax = Remove-YamlComment -Text $configLine.Substring($closingQuoteIndex + 1)
+                        $quotedScalarQuote = Get-YamlUnclosedQuotedScalar -Text $remainingSyntax
+                        $flowCollectionDepth += Get-YamlFlowCollectionDepthDelta -Text $remainingSyntax
+                    }
+                    continue
+                }
+
+                $configSyntaxLine = Remove-YamlComment -Text $configLine
+                if ($flowCollectionDepth -gt 0) {
+                    $flowCollectionDepth += Get-YamlFlowCollectionDepthDelta -Text $configSyntaxLine
+                    if ($flowCollectionDepth -lt 0) {
+                        $flowCollectionDepth = 0
+                    }
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($configSyntaxLine)) {
+                    continue
+                }
+
+                if ($configSyntaxLine -notmatch '^( *)') {
+                    $inUpdatesList = $false
+                    $inUpdateEntry = $false
+                    $inAssignmentList = $false
+                    $blockScalarIndent = $null
+                    $quotedScalarQuote = $null
+                    $flowCollectionDepth = 0
+                    continue
+                }
+
+                $configIndent = $Matches[1].Length
+                if ($null -ne $blockScalarIndent) {
+                    if ($configIndent -gt $blockScalarIndent) {
+                        continue
+                    }
+                    $blockScalarIndent = $null
+                }
+
+                $trimmedConfigLine = $configSyntaxLine.Trim()
+                if ($trimmedConfigLine.StartsWith('#')) {
+                    continue
+                }
+
+                if ($configIndent -eq 0) {
+                    $inUpdatesList = $configSyntaxLine -cmatch '^updates:\s*$'
+                    $inUpdateEntry = $false
+                    $inAssignmentList = $false
+                    $flowCollectionDepth = 0
+                    continue
+                }
+
+                if (-not $inUpdatesList) {
+                    continue
+                }
+
+                $flowAssignment = [regex]::Match(
+                    $configSyntaxLine,
+                    '^(?:  -\s+|    )(assignees|reviewers):\s*\[(.*)\]\s*$'
+                )
+                if ($flowAssignment.Success) {
+                    if ($configIndent -eq 2) {
+                        $inUpdateEntry = $true
+                    } elseif (-not $inUpdateEntry) {
+                        continue
+                    }
+
+                    $flowValues = $flowAssignment.Groups[2].Value
+                    if ($flowValues -match ('^\s*(?:' + $githubHandleScalar + '(?:\s*,\s*' + $githubHandleScalar + ')*(?:\s*,)?)?\s*$')) {
+                        $assignmentSpans = [System.Collections.Generic.List[object]]::new()
+                        foreach ($flowValue in [regex]::Matches($flowValues, $githubHandleScalar)) {
+                            foreach ($captureIndex in 1..3) {
+                                if ($flowValue.Groups[$captureIndex].Success) {
+                                    $assignmentSpans.Add([pscustomobject]@{
+                                            Start  = $flowAssignment.Groups[2].Index + $flowValue.Groups[$captureIndex].Index
+                                            Length = $flowValue.Groups[$captureIndex].Length
+                                        })
+                                    break
+                                }
+                            }
+                        }
+
+                        if ($assignmentSpans.Count -gt 0) {
+                            $assignmentSpansByLineIndex[$configLineIndex] = @($assignmentSpans)
+                        }
+                    }
+                    $inAssignmentList = $false
+                    continue
+                }
+
+                if ($configSyntaxLine -cmatch '^  -\s+(assignees|reviewers):\s*$') {
+                    $inUpdateEntry = $true
                     $inAssignmentList = $true
                     continue
                 }
 
-                if ($inAssignmentList) {
-                    if (
-                        $configLine -match '^\s*-\s*["'']?([A-Za-z0-9][A-Za-z0-9-]*)["'']?\s*$'
-                    ) {
-                        $configIdentityValues += $Matches[1]
-                        continue
+                if ($configSyntaxLine -cmatch '^  -(?:\s+[A-Za-z0-9_-]+:\s*.*)?$') {
+                    $inUpdateEntry = $true
+                    $inAssignmentList = $false
+                    $flowCollectionDepth += Get-YamlFlowCollectionDepthDelta -Text $configSyntaxLine
+                    if ($configSyntaxLine -match ':\s*(?:(?:![^\s]*|&[^\s]+)\s+)*[>|][0-9+-]*\s*$') {
+                        $blockScalarIndent = $configIndent
                     }
+                    $mappingColonIndex = $configSyntaxLine.IndexOf(':')
+                    if ($mappingColonIndex -ge 0) {
+                        $quotedScalarQuote = Get-YamlUnclosedQuotedScalar -Text $configSyntaxLine.Substring($mappingColonIndex + 1)
+                    }
+                    continue
+                }
 
-                    if (
-                        $configLine -notmatch '^\s*$' -and
-                        $configLine -notmatch '^\s*-\s*'
-                    ) {
-                        $inAssignmentList = $false
+                if ($configIndent -le 2) {
+                    $inUpdateEntry = $false
+                    $inAssignmentList = $false
+                    continue
+                }
+
+                if (-not $inUpdateEntry) {
+                    continue
+                }
+
+                $flowCollectionDepth += Get-YamlFlowCollectionDepthDelta -Text $configSyntaxLine
+                $mappingColonIndex = $configSyntaxLine.IndexOf(':')
+                if ($mappingColonIndex -ge 0) {
+                    $quotedScalarQuote = Get-YamlUnclosedQuotedScalar -Text $configSyntaxLine.Substring($mappingColonIndex + 1)
+                }
+                if ($null -ne $quotedScalarQuote) {
+                    $inAssignmentList = $false
+                    continue
+                }
+                if ($flowCollectionDepth -gt 0) {
+                    $inAssignmentList = $false
+                    continue
+                }
+
+                if ($configSyntaxLine -match ':\s*(?:(?:![^\s]*|&[^\s]+)\s+)*[>|][0-9+-]*\s*$') {
+                    $inAssignmentList = $false
+                    $blockScalarIndent = $configIndent
+                    continue
+                }
+
+                if ($configSyntaxLine -cmatch '^    (assignees|reviewers):\s*$') {
+                    $inAssignmentList = $true
+                    continue
+                }
+
+                $blockAssignment = [regex]::Match(
+                    $configSyntaxLine,
+                    ('^ {4}(?: {2})?-\s*' + $githubHandleScalar + '\s*$')
+                )
+                if ($inAssignmentList -and $blockAssignment.Success) {
+                    foreach ($captureIndex in 1..3) {
+                        if ($blockAssignment.Groups[$captureIndex].Success) {
+                            $assignmentSpansByLineIndex[$configLineIndex] = @(
+                                [pscustomobject]@{
+                                    Start  = $blockAssignment.Groups[$captureIndex].Index
+                                    Length = $blockAssignment.Groups[$captureIndex].Length
+                                }
+                            )
+                            break
+                        }
                     }
+                    continue
+                }
+
+                if ($configIndent -le 4) {
+                    $inAssignmentList = $false
+                    continue
                 }
             }
-
-            $configIdentityValues = $configIdentityValues | Sort-Object -Unique
         }
 
         foreach ($value in $exactValues) {
-            if (
-                $allPathsAreDependabotConfig -and
-                $value -in $configIdentityValues
-            ) {
-                continue
+            $contentHasUnallowedIdentity = $false
+            for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+                $lineToScan = $lines[$lineIndex]
+                if ($assignmentSpansByLineIndex.ContainsKey($lineIndex)) {
+                    foreach (
+                        $assignmentSpan in @(
+                            $assignmentSpansByLineIndex[$lineIndex] |
+                                Sort-Object Start -Descending
+                        )
+                    ) {
+                        $lineToScan = $lineToScan.Remove(
+                            $assignmentSpan.Start,
+                            $assignmentSpan.Length
+                        ).Insert(
+                            $assignmentSpan.Start,
+                            (' ' * $assignmentSpan.Length)
+                        )
+                    }
+                }
+
+                if (
+                    $lineToScan.IndexOf(
+                        $value,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    ) -lt 0
+                ) {
+                    continue
+                }
+
+                $contentHasUnallowedIdentity = $true
+                break
             }
 
             if (
@@ -456,10 +808,7 @@ try {
                     $value,
                     [System.StringComparison]::OrdinalIgnoreCase
                 ) -ge 0 -or
-                $content.IndexOf(
-                    $value,
-                    [System.StringComparison]::OrdinalIgnoreCase
-                ) -ge 0
+                $contentHasUnallowedIdentity
             ) {
                 Add-Finding $findings 'Repository account identifier' $displayPath '-'
             }
