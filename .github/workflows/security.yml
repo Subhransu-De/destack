@@ -76,6 +76,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
       - name: Audit commit metadata and every historical blob
-        shell: pwsh
-        run: ./.github/scripts/audit-repository.ps1
+        shell: bash
+        run: bun ./.github/scripts/audit-repository.ts
