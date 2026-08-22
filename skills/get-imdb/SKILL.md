@@ -1,9 +1,7 @@
 ---
 name: get-imdb
-description: |
-  Get structured title information from an IMDb link or IMDb title ID.
-  Use this skill for movies, TV series, shorts, and TV episodes.
-  The skill reports unavailable data and does not invent values.
+description: Use this to get full IMDb information about video content.
+user-invocable: true
 ---
 
 # Get IMDb

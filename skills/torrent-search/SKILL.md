@@ -1,6 +1,7 @@
 ---
 name: torrent-search
-description: "Search for torrents via qBittorrent WebAPI with smart TV series, movie, and book detection. For TV series: finds all seasons/episodes available, counts episodes, lists them all, and auto-selects top quality version for each episode. For movies: presents the best 4K and best 1080p options (highest seeds within each tier) so the user can pick. For books: finds highest-seeded result, adds it, validates file format (PDF/EPUB/MOBI), and removes if invalid format. Automatically ranks by quality tier (4K > 1080p > 720p) then seed count. Use when searching for movies/shows/books, finding best versions of content, adding torrents to qBittorrent, checking downloads. Triggers on: 'search torrent', 'find me a torrent', 'download via torrent', 'add to qbittorrent', 'best 4K torrent', 'most seeded version', 'find book', 'check my downloads', or any torrent/BitTorrent request."
+description: Use this to search for torrents in qBittorrent and add them to downloads.
+user-invocable: true
 ---
 
 # Torrent Search
