@@ -1,0 +1,17 @@
+{
+  "name": "get-imdb-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "get": "bun run scripts/get_imdb.ts",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/node": "^26.2.0",
+    "bun-types": "1.3.14",
+    "typescript": "7.0.2",
+    "undici-types": "^8.10.0"
+  }
+}

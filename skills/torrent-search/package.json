@@ -1,0 +1,23 @@
+{
+  "name": "torrent-search-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "search:start": "bun run scripts/search_start.ts",
+    "search:fetch": "bun run scripts/search_fetch.ts",
+    "analyze:content": "bun run scripts/analyze_content.ts",
+    "analyze:books": "bun run scripts/analyze_books.ts",
+    "results:parse": "bun run scripts/parse_results.ts",
+    "results:add": "bun run scripts/select_and_add.ts",
+    "book:validate": "bun run scripts/validate_book.ts",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/node": "^26.2.0",
+    "bun-types": "1.3.14",
+    "typescript": "7.0.2",
+    "undici-types": "^8.10.0"
+  }
+}
