@@ -10,7 +10,7 @@ user-invocable: true
 
 This skill gets title information from an IMDb link. It returns JSON for a person or another skill.
 
-The resolver uses IMDb-owned endpoints only. It does not use metadata from a third-party service.
+The resolver gets metadata from IMDb. If IMDb blocks direct title-page requests, it can use Jina Reader to retrieve the public IMDb page and recover the explicit original title.
 
 ## Requirements
 
@@ -58,6 +58,7 @@ The output contains these main fields:
 - `runtime_minutes`, `description`, `genres`, `rating`, and credits contain optional page data.
 - `tv_inventory` contains available series totals and explicit incomplete fields.
 - `source_status` gives the result of each IMDb request.
+- `source_status.reader` shows whether the Jina Reader fallback supplied the original title.
 - `unavailable_fields` lists each field that the resolver cannot get.
 
 ## TV Series Rules
@@ -76,7 +77,7 @@ The IMDb suggestion service supplies basic title data. This data usually include
 
 The resolver also requests IMDb title pages. These pages can supply JSON-LD data for the plot, runtime, genres, rating, and credits.
 
-IMDb can block automated title-page requests. If IMDb blocks a page, the resolver keeps the basic data and reports the page error.
+IMDb can block automated title-page requests. If IMDb blocks a page or does not expose the original title in JSON-LD, the resolver asks Jina Reader for the public IMDb page and reads only its explicit `Original title:` value. It reports both the direct page error and the reader status.
 
 The full IMDb GraphQL API needs an IMDb data subscription and AWS credentials. This skill does not use that API.
 

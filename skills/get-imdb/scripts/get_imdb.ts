@@ -46,6 +46,13 @@ interface PageData {
   episode_count: number | null;
 }
 
+interface ReaderData {
+  status: "not_used" | "ok" | "unavailable";
+  http_status: number | null;
+  error: string | null;
+  original_title: string | null;
+}
+
 export interface ImdbMetadata {
   imdb_id: string;
   input: string;
@@ -86,6 +93,7 @@ export interface ImdbMetadata {
   source_status: {
     suggestion: "ok";
     pages: PageData[];
+    reader: ReaderData;
   };
   unavailable_fields: string[];
 }
@@ -219,6 +227,11 @@ export function parseJsonLd(html: string): Record<string, unknown> | null {
   return null;
 }
 
+export function parseReaderOriginalTitle(markdown: string): string | null {
+  const match = /^Original title:\s*(.+?)\s*$/im.exec(markdown);
+  return match?.[1]?.trim() || null;
+}
+
 function pageDataFromJsonLd(
   locale: string,
   status: number,
@@ -325,6 +338,65 @@ function unavailablePage(
   };
 }
 
+function unusedReader(): ReaderData {
+  return {
+    status: "not_used",
+    http_status: null,
+    error: null,
+    original_title: null,
+  };
+}
+
+async function fetchReader(
+  imdbId: string,
+  fetchImpl: typeof fetch,
+): Promise<ReaderData> {
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `https://r.jina.ai/http://www.imdb.com/title/${imdbId}/`,
+      {
+        headers: {
+          Accept: "text/plain",
+          "User-Agent": "get-imdb/1.1",
+        },
+        signal: AbortSignal.timeout(30_000),
+      },
+    );
+  } catch (error) {
+    return {
+      status: "unavailable",
+      http_status: null,
+      error: errorMessage(error),
+      original_title: null,
+    };
+  }
+  const markdown = await response.text();
+  if (!response.ok || !markdown.trim()) {
+    return {
+      status: "unavailable",
+      http_status: response.status,
+      error: `Jina Reader returned HTTP ${response.status} without usable IMDb page data.`,
+      original_title: null,
+    };
+  }
+  const originalTitle = parseReaderOriginalTitle(markdown);
+  if (!originalTitle) {
+    return {
+      status: "unavailable",
+      http_status: response.status,
+      error: "The rendered IMDb page did not contain an original title.",
+      original_title: null,
+    };
+  }
+  return {
+    status: "ok",
+    http_status: response.status,
+    error: null,
+    original_title: originalTitle,
+  };
+}
+
 export function parseSuggestion(
   payload: unknown,
   imdbId: string,
@@ -398,7 +470,12 @@ export async function resolveImdb(
     page.locale.toLowerCase().startsWith("fr"),
   );
   const primary = item.l as string;
-  const original = firstPageValue(pages, (page) => page.alternate_name);
+  const pageOriginal = firstPageValue(pages, (page) => page.alternate_name);
+  const reader =
+    options.includePages !== false && pageOriginal === null
+      ? await fetchReader(imdbId, fetchImpl)
+      : unusedReader();
+  const original = pageOriginal ?? reader.original_title;
   const english = englishPage?.name ?? null;
   const french = frenchPage?.name ?? null;
   const release = yearRange(item);
@@ -464,7 +541,7 @@ export async function resolveImdb(
             complete: false,
           }
         : null,
-    source_status: { suggestion: "ok", pages },
+    source_status: { suggestion: "ok", pages, reader },
     unavailable_fields: [],
   };
   const unavailable: Array<[string, unknown]> = [

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   extractImdbId,
   parseJsonLd,
+  parseReaderOriginalTitle,
   parseSuggestion,
   resolveImdb,
 } from "../scripts/get_imdb";
@@ -59,6 +60,11 @@ describe("IMDb metadata", () => {
     expect(parseJsonLd(html)?.name).toBe("Breaking Bad");
   });
 
+  test("reads an original title from a rendered IMDb page", () => {
+    const markdown = "# The Holy Family\n\nOriginal title: Sveta obitelj\n";
+    expect(parseReaderOriginalTitle(markdown)).toBe("Sveta obitelj");
+  });
+
   test("keeps unavailable localized data empty", async () => {
     const fetchImpl = (async (input: string | URL | Request) => {
       const url = String(input);
@@ -82,5 +88,52 @@ describe("IMDb metadata", () => {
     expect(metadata.tv_inventory?.season_count).toBe(5);
     expect(metadata.tv_inventory?.complete).toBeFalse();
     expect(metadata.unavailable_fields).toContain("titles.french");
+  });
+
+  test("falls back to a rendered IMDb page when direct pages are blocked", async () => {
+    const blockedId = "tt15978202";
+    const blockedSuggestion = {
+      d: [
+        {
+          id: blockedId,
+          l: "The Holy Family",
+          q: "feature",
+          qid: "movie",
+          y: 2023,
+        },
+      ],
+    };
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("media-imdb.com"))
+        return Response.json(blockedSuggestion);
+      if (url.startsWith("https://r.jina.ai/")) {
+        return new Response(
+          "# The Holy Family\n\nOriginal title: Sveta obitelj\n",
+          { status: 200 },
+        );
+      }
+      if (url.includes("imdb.com/title"))
+        return new Response(null, { status: 202 });
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+
+    const metadata = await resolveImdb(
+      `https://www.imdb.com/title/${blockedId}/`,
+      { fetchImpl },
+    );
+
+    expect(metadata.titles.original).toBe("Sveta obitelj");
+    expect(metadata.titles.variants).toEqual([
+      "The Holy Family",
+      "Sveta obitelj",
+    ]);
+    expect(
+      metadata.source_status.pages.every(
+        (page) => page.status === "unavailable",
+      ),
+    ).toBeTrue();
+    expect(metadata.source_status.reader.status).toBe("ok");
+    expect(metadata.unavailable_fields).not.toContain("titles.original");
   });
 });
