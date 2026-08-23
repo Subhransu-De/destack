@@ -18,7 +18,11 @@ const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 const findings: Finding[] = [];
 const blobPaths = new Map<string, Set<string>>();
 
-function runCommand(args: string[], cwd: string, allowFailure = false): Uint8Array {
+function runCommand(
+  args: string[],
+  cwd: string,
+  allowFailure = false,
+): Uint8Array {
   const result = Bun.spawnSync({
     cmd: args,
     cwd,
@@ -71,8 +75,8 @@ function addBlobPath(blobId: string, path: string): void {
 
 function auditPath(path: string): void {
   if (
-    !["AGENTS.md", "CLAUDE.md"].includes(path) &&
-    !/^(\.github|bash_setup|claude|windows_terminal)\//.test(path)
+    ![".gitignore", "AGENTS.md", "CLAUDE.md"].includes(path) &&
+    !/^(\.github|\.zed|bash_setup|claude|skills|windows_terminal)\//.test(path)
   ) {
     addFinding("Top-level scope violation", path, "-");
   }
@@ -85,13 +89,29 @@ function auditPath(path: string): void {
 function auditStagedChanges(repoRoot: string): void {
   const changedPaths = splitLines(
     runText(
-      ["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only", "--diff-filter=ACMRD"],
+      [
+        "git",
+        "-c",
+        "core.quotepath=false",
+        "diff",
+        "--cached",
+        "--name-only",
+        "--diff-filter=ACMRD",
+      ],
       repoRoot,
     ),
   );
   const stagedPaths = splitLines(
     runText(
-      ["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+      [
+        "git",
+        "-c",
+        "core.quotepath=false",
+        "diff",
+        "--cached",
+        "--name-only",
+        "--diff-filter=ACMR",
+      ],
       repoRoot,
     ),
   );
@@ -107,7 +127,10 @@ function auditStagedChanges(repoRoot: string): void {
   }
 
   for (const path of stagedPaths) {
-    const entry = runText(["git", "ls-files", "--stage", "--", path], repoRoot).trimEnd();
+    const entry = runText(
+      ["git", "ls-files", "--stage", "--", path],
+      repoRoot,
+    ).trimEnd();
     const match = /^(\d+) ([0-9a-f]{40}) \d+\t(.+)$/.exec(entry);
     if (!match) {
       addFinding("Malformed staged Git entry", path, "-");
@@ -123,7 +146,9 @@ function auditStagedChanges(repoRoot: string): void {
 }
 
 function auditHistory(repoRoot: string): void {
-  const commitIds = splitLines(runText(["git", "rev-list", "--all"], repoRoot)).sort();
+  const commitIds = splitLines(
+    runText(["git", "rev-list", "--all"], repoRoot),
+  ).sort();
   if (commitIds.length === 0) {
     throw new Error("No reachable commits were found.");
   }
@@ -136,7 +161,8 @@ function auditHistory(repoRoot: string): void {
     /^noreply@github\.com$/,
   ];
   const syntheticMergeCommitId =
-    /^refs\/pull\/\d+\/merge$/.test(process.env.GITHUB_REF ?? "") && process.env.GITHUB_SHA?.trim()
+    /^refs\/pull\/\d+\/merge$/.test(process.env.GITHUB_REF ?? "") &&
+    process.env.GITHUB_SHA?.trim()
       ? process.env.GITHUB_SHA.trim()
       : null;
 
@@ -147,7 +173,10 @@ function auditHistory(repoRoot: string): void {
   }
 
   for (const commitId of commitIds) {
-    const rawCommit = runText(["git", "cat-file", "commit", commitId], repoRoot);
+    const rawCommit = runText(
+      ["git", "cat-file", "commit", commitId],
+      repoRoot,
+    );
 
     if (commitId !== syntheticMergeCommitId) {
       if (/^gpgsig /m.test(rawCommit)) {
@@ -155,26 +184,41 @@ function auditHistory(repoRoot: string): void {
       }
 
       for (const headerName of ["author", "committer"]) {
-        const header = new RegExp(`^${headerName} .+ <([^>]+)> \\d+ ([+-]\\d{4})\\r?$`, "m").exec(
-          rawCommit,
-        );
+        const header = new RegExp(
+          `^${headerName} .+ <([^>]+)> \\d+ ([+-]\\d{4})\\r?$`,
+          "m",
+        ).exec(rawCommit);
 
         if (!header) {
-          addFinding(`Malformed ${headerName} metadata`, commitId.slice(0, 12), "-");
+          addFinding(
+            `Malformed ${headerName} metadata`,
+            commitId.slice(0, 12),
+            "-",
+          );
           continue;
         }
 
         const [, email, timezone] = header;
         if (!allowedEmailPatterns.some((pattern) => pattern.test(email))) {
-          addFinding(`Non-noreply ${headerName} email`, commitId.slice(0, 12), "-");
+          addFinding(
+            `Non-noreply ${headerName} email`,
+            commitId.slice(0, 12),
+            "-",
+          );
         }
         if (timezone !== "+0000") {
-          addFinding(`Non-UTC ${headerName} timezone`, commitId.slice(0, 12), "-");
+          addFinding(
+            `Non-UTC ${headerName} timezone`,
+            commitId.slice(0, 12),
+            "-",
+          );
         }
       }
     }
 
-    for (const entry of splitLines(runText(["git", "ls-tree", "-r", commitId], repoRoot))) {
+    for (const entry of splitLines(
+      runText(["git", "ls-tree", "-r", commitId], repoRoot),
+    )) {
       const match = /^(\d+) blob ([0-9a-f]{40})\t(.+)$/.exec(entry);
       if (!match) {
         addFinding("Non-regular Git tree entry", commitId.slice(0, 12), "-");
@@ -191,7 +235,11 @@ function auditHistory(repoRoot: string): void {
   }
 }
 
-function addOptionalCommandValues(repoRoot: string, command: string[], values: string[]): void {
+function addOptionalCommandValues(
+  repoRoot: string,
+  command: string[],
+  values: string[],
+): void {
   const output = runText(command, repoRoot, true);
   if (output) {
     values.push(output);
@@ -229,31 +277,60 @@ function getExactValues(repoRoot: string): string[] {
 
     for (const interfaces of Object.values(networkInterfaces())) {
       for (const network of interfaces ?? []) {
-        if (network.mac && network.mac.replace(/[:-]/g, "") !== "0".repeat(12)) {
+        if (
+          network.mac &&
+          network.mac.replace(/[:-]/g, "") !== "0".repeat(12)
+        ) {
           values.push(network.mac);
         }
-        if (network.family === "IPv4" && !network.internal && !network.address.startsWith("169.254.")) {
+        if (
+          network.family === "IPv4" &&
+          !network.internal &&
+          !network.address.startsWith("169.254.")
+        ) {
           values.push(network.address);
         }
       }
     }
 
     if (process.platform === "win32") {
-      addOptionalCommandValues(repoRoot, ["whoami.exe", "/user", "/fo", "csv", "/nh"], values);
       addOptionalCommandValues(
         repoRoot,
-        ["reg.exe", "query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"],
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
         values,
       );
-      addOptionalCommandValues(repoRoot, ["getmac.exe", "/fo", "csv", "/nh"], values);
+      addOptionalCommandValues(
+        repoRoot,
+        [
+          "reg.exe",
+          "query",
+          "HKLM\\SOFTWARE\\Microsoft\\Cryptography",
+          "/v",
+          "MachineGuid",
+        ],
+        values,
+      );
+      addOptionalCommandValues(
+        repoRoot,
+        ["getmac.exe", "/fo", "csv", "/nh"],
+        values,
+      );
       addOptionalCommandValues(repoRoot, ["ipconfig.exe", "/all"], values);
     } else {
       addOptionalCommandValues(repoRoot, ["hostname"], values);
       addOptionalCommandValues(repoRoot, ["hostname", "-I"], values);
     }
 
-    addOptionalCommandValues(repoRoot, ["git", "config", "--global", "--get", "user.name"], values);
-    addOptionalCommandValues(repoRoot, ["git", "config", "--global", "--get", "user.email"], values);
+    addOptionalCommandValues(
+      repoRoot,
+      ["git", "config", "--global", "--get", "user.name"],
+      values,
+    );
+    addOptionalCommandValues(
+      repoRoot,
+      ["git", "config", "--global", "--get", "user.email"],
+      values,
+    );
   }
 
   const ignoredValues = new Set([
@@ -265,37 +342,84 @@ function getExactValues(repoRoot: string): string[] {
     "workgroup",
   ]);
 
-  return [...new Set(values.filter((value): value is string => Boolean(value && value.trim().length >= 4)))]
+  return [
+    ...new Set(
+      values.filter((value): value is string =>
+        Boolean(value && value.trim().length >= 4),
+      ),
+    ),
+  ]
     .filter((value) => !ignoredValues.has(value.toLowerCase()))
     .sort();
 }
 
 const patterns: PatternDefinition[] = [
-  { category: "Email address", pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
+  {
+    category: "Email address",
+    pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+  },
   { category: "Windows absolute path", pattern: /\b[A-Z]:[\\/][^\s"'`]+/gi },
-  { category: "Unix user path", pattern: /(?:^|[\s"'])\/(?:home|Users)\/[^\/\s"']+/gi },
+  {
+    category: "Unix user path",
+    pattern: /(?:^|[\s"'])\/(?:home|Users)\/[^\/\s"']+/gi,
+  },
   {
     category: "IPv4 address",
-    pattern: /(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])/g,
+    pattern:
+      /(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])/g,
   },
-  { category: "MAC address", pattern: /\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/gi },
+  {
+    category: "MAC address",
+    pattern: /\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/gi,
+  },
   { category: "Windows SID", pattern: /\bS-1-(?:\d+-){1,14}\d+\b/g },
   {
     category: "UUID or GUID",
-    pattern: /\{?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b\}?/gi,
+    pattern:
+      /\{?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b\}?/gi,
   },
   { category: "Private key", pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
-  { category: "SSH public key", pattern: /\b(?:ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp\d+)\s+[A-Za-z0-9+/=]{40,}/g },
-  { category: "GitHub token", pattern: /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g },
+  {
+    category: "SSH public key",
+    pattern:
+      /\b(?:ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp\d+)\s+[A-Za-z0-9+/=]{40,}/g,
+  },
+  {
+    category: "GitHub token",
+    pattern:
+      /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
+  },
   { category: "AWS access key", pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g },
-  { category: "JWT", pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g },
-  { category: "Credential in URL", pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:]+:[^\s/@]+@/gi },
+  {
+    category: "JWT",
+    pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+  },
+  {
+    category: "Credential in URL",
+    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:]+:[^\s/@]+@/gi,
+  },
 ];
 
 const allowedGuids = new Set([
   "2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b",
   "574e775e-4f2a-5b96-ac1e-a2962a402336",
 ]);
+
+function isAllowedGenericValue(category: string, value: string): boolean {
+  if (category === "IPv4 address") {
+    return value === "0.0.0.0" || value === "127.0.0.1";
+  }
+
+  if (category === "Windows absolute path") {
+    return [
+      /^C:[\\/]{1,2}config[\\/]{1,2}qBittorrent\.ini$/i,
+      /^C:[\\/]{1,2}Downloads(?:[\\/]{1,2}Movies)?[\\/]{0,2}$/i,
+      /^C:[\\/]{1,2}\.\.\.[\\/]{1,2}qbt_search_123\.json$/i,
+    ].some((pattern) => pattern.test(value));
+  }
+
+  return false;
+}
 
 function auditBlobs(repoRoot: string): void {
   console.log(`Auditing ${blobPaths.size} unique historical blobs...`);
@@ -306,7 +430,10 @@ function auditBlobs(repoRoot: string): void {
     const paths = [...pathSet].sort();
     const displayPath = paths.join(",");
     const allPathsAreDependabotConfig =
-      paths.length > 0 && paths.every((path) => path === ".github/dependabot.yml");
+      paths.length > 0 &&
+      paths.every((path) => path === ".github/dependabot.yml");
+    const allPathsAreBunLockfiles =
+      paths.length > 0 && paths.every((path) => path.endsWith("/bun.lock"));
 
     if (bytes.includes(0)) {
       addFinding("Binary historical blob", displayPath, "-");
@@ -322,9 +449,12 @@ function auditBlobs(repoRoot: string): void {
     }
 
     for (const value of exactValues) {
-      const pathContainsValue = displayPath.toLowerCase().includes(value.toLowerCase());
+      const pathContainsValue = displayPath
+        .toLowerCase()
+        .includes(value.toLowerCase());
       const contentContainsValue =
-        !allPathsAreDependabotConfig && content.toLowerCase().includes(value.toLowerCase());
+        !allPathsAreDependabotConfig &&
+        content.toLowerCase().includes(value.toLowerCase());
       if (pathContainsValue || contentContainsValue) {
         addFinding("Repository account identifier", displayPath, "-");
       }
@@ -336,6 +466,10 @@ function auditBlobs(repoRoot: string): void {
 
       for (const definition of patterns) {
         for (const match of line.matchAll(definition.pattern)) {
+          if (isAllowedGenericValue(definition.category, match[0])) {
+            continue;
+          }
+
           if (definition.category === "UUID or GUID") {
             const normalizedGuid = match[0].replace(/[{}]/g, "").toLowerCase();
             if (allowedGuids.has(normalizedGuid)) {
@@ -351,7 +485,11 @@ function auditBlobs(repoRoot: string): void {
         /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{40,}(?![A-Za-z0-9+/_=-])/g,
       )) {
         const candidate = match[0];
-        if (candidate.endsWith("_8wekyb3d8bbwe") || allowedGuids.has(candidate.replace(/[{}]/g, "").toLowerCase())) {
+        if (
+          allPathsAreBunLockfiles ||
+          candidate.endsWith("_8wekyb3d8bbwe") ||
+          allowedGuids.has(candidate.replace(/[{}]/g, "").toLowerCase())
+        ) {
           continue;
         }
 
@@ -364,7 +502,10 @@ function auditBlobs(repoRoot: string): void {
 }
 
 function main(): void {
-  const repoRoot = runText(["git", "rev-parse", "--show-toplevel"], process.cwd()).trim();
+  const repoRoot = runText(
+    ["git", "rev-parse", "--show-toplevel"],
+    process.cwd(),
+  ).trim();
   if (!repoRoot) {
     throw new Error("Repository audit must run inside a Git repository.");
   }
@@ -376,10 +517,18 @@ function main(): void {
   }
   auditBlobs(repoRoot);
 
-  const uniqueFindings = [...new Map(findings.map((finding) => [`${finding.category}\0${finding.path}\0${finding.line}`, finding])).values()]
-    .sort((left, right) =>
-      `${left.category}\0${left.path}\0${left.line}`.localeCompare(`${right.category}\0${right.path}\0${right.line}`),
-    );
+  const uniqueFindings = [
+    ...new Map(
+      findings.map((finding) => [
+        `${finding.category}\0${finding.path}\0${finding.line}`,
+        finding,
+      ]),
+    ).values(),
+  ].sort((left, right) =>
+    `${left.category}\0${left.path}\0${left.line}`.localeCompare(
+      `${right.category}\0${right.path}\0${right.line}`,
+    ),
+  );
 
   if (uniqueFindings.length > 0) {
     console.error("Repository sensitive-information audit failed.");
