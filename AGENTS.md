@@ -8,7 +8,7 @@ This repository contains configurations from my personal setup.
 - Copy the exact configuration, preserving its structure, into a folder named after the software.
   - If the software's name contains spaces, replace them with underscores.
 - If the configuration contains personal information, replace it with generic placeholders.
-- In the copied configuration folder's `README.md`, add instructions explaining how to install the configuration on another machine.
+- When a new configuration is copied or existing is changed, checkthe `./INSTALLATION.md` file. Update it accordingly.
 
 ## Instructions of about the skills folder
 
