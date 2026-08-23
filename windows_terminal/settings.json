@@ -7,15 +7,11 @@
         "action": "copy",
         "singleLine": false
       },
-      "id": "User.CopyText"
+      "id": "User.copy.644BA8F2"
     },
     {
       "command": "paste",
-      "id": "User.PasteText"
-    },
-    {
-      "command": "find",
-      "id": "User.FindText"
+      "id": "User.paste"
     },
     {
       "command": {
@@ -23,21 +19,25 @@
         "split": "auto",
         "splitMode": "duplicate"
       },
-      "id": "User.DuplicatePane"
+      "id": "User.splitPane.A6751878"
+    },
+    {
+      "command": "find",
+      "id": "User.find"
     },
     {
       "command": {
         "action": "sendInput",
         "input": "\u001b[13;2u"
       },
-      "id": "User.SendShiftEnter"
+      "id": "User.sendInput.8882FD6D"
     },
     {
       "command": {
         "action": "sendInput",
         "input": "\u001b[13;3u"
       },
-      "id": "User.SendAltEnter"
+      "id": "User.sendInput.237E8A98"
     }
   ],
   "copyFormatting": "none",
@@ -49,28 +49,28 @@
   ],
   "keybindings": [
     {
-      "id": "User.SendShiftEnter",
-      "keys": "shift+enter"
-    },
-    {
-      "id": "User.DuplicatePane",
+      "id": "User.splitPane.A6751878",
       "keys": "alt+shift+d"
     },
     {
-      "id": "User.SendAltEnter",
+      "id": "User.sendInput.8882FD6D",
+      "keys": "shift+enter"
+    },
+    {
+      "id": "User.sendInput.237E8A98",
       "keys": "alt+enter"
     },
     {
-      "id": "User.CopyText",
+      "id": "User.copy.644BA8F2",
       "keys": "ctrl+c"
     },
     {
-      "id": "User.FindText",
-      "keys": "ctrl+shift+f"
+      "id": "User.paste",
+      "keys": "ctrl+v"
     },
     {
-      "id": "User.PasteText",
-      "keys": "ctrl+v"
+      "id": "User.find",
+      "keys": "ctrl+shift+f"
     }
   ],
   "launchMode": "maximized",
@@ -85,7 +85,7 @@
       "bellStyle": "taskbar",
       "colorScheme": "Catppuccin Mocha",
       "cursorShape": "filledBox",
-      "experimental.rightClickContextMenu": false,
+      "rightClickContextMenu": false,
       "font": {
         "builtinGlyphs": true,
         "cellHeight": "1.2",
@@ -102,6 +102,10 @@
     },
     "list": [
       {
+        "commandline": "\"%PROGRAMFILES%/Git/usr/bin/bash.exe\" -i -l",
+        "environment": {
+          "MSYSTEM": "MINGW64"
+        },
         "guid": "{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}",
         "hidden": false,
         "name": "Git Bash",
@@ -113,6 +117,12 @@
         "hidden": false,
         "name": "PowerShell",
         "source": "Windows.Terminal.PowershellCore"
+      },
+      {
+        "guid": "{5d0ce597-fed8-5ebd-83f9-f7f99a099f10}",
+        "hidden": false,
+        "name": "Ubuntu-24.04",
+        "source": "Microsoft.WSL"
       }
     ]
   },
@@ -142,6 +152,7 @@
     }
   ],
   "tabWidthMode": "titleLength",
+  "themes": [],
   "useAcrylicInTabRow": true,
   "windowingBehavior": "useExisting"
 }

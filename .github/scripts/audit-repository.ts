@@ -75,7 +75,9 @@ function addBlobPath(blobId: string, path: string): void {
 
 function auditPath(path: string): void {
   if (
-    ![".gitignore", "AGENTS.md", "CLAUDE.md"].includes(path) &&
+    ![".gitignore", "AGENTS.md", "CLAUDE.md", "INSTALLATION.md"].includes(
+      path,
+    ) &&
     !/^(\.github|\.zed|bash_setup|claude|skills|windows_terminal)\//.test(path)
   ) {
     addFinding("Top-level scope violation", path, "-");
@@ -403,6 +405,7 @@ const patterns: PatternDefinition[] = [
 const allowedGuids = new Set([
   "2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b",
   "574e775e-4f2a-5b96-ac1e-a2962a402336",
+  "5d0ce597-fed8-5ebd-83f9-f7f99a099f10",
 ]);
 
 function isAllowedGenericValue(
