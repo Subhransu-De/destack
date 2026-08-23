@@ -109,6 +109,33 @@ interface ParsedArgs {
   values: Map<string, string[]>;
 }
 
+const IMDB_BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+
+function imdbPageHeaders(locale: string): Record<string, string> {
+  const language = locale.toLowerCase().startsWith("en")
+    ? `${locale},en;q=0.9`
+    : `${locale},en-US;q=0.8,en;q=0.7`;
+  return {
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": language,
+    "Cache-Control": "max-age=0",
+    Priority: "u=0, i",
+    Referer: "https://www.imdb.com/",
+    "Sec-CH-UA":
+      '"Not=A?Brand";v="24", "Chromium";v="140", "Google Chrome";v="140"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": IMDB_BROWSER_USER_AGENT,
+  };
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -284,11 +311,7 @@ async function fetchPage(
   let response: Response;
   try {
     response = await fetchImpl(`https://www.imdb.com/title/${imdbId}/`, {
-      headers: {
-        "Accept-Language": `${locale},en;q=0.7`,
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
-      },
+      headers: imdbPageHeaders(locale),
       signal: AbortSignal.timeout(15_000),
     });
   } catch (error) {

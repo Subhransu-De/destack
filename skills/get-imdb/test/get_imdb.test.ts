@@ -66,10 +66,15 @@ describe("IMDb metadata", () => {
   });
 
   test("keeps unavailable localized data empty", async () => {
-    const fetchImpl = (async (input: string | URL | Request) => {
+    const seenPageHeaders: Headers[] = [];
+    const fetchImpl = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
       const url = String(input);
       if (url.includes("media-imdb.com")) return Response.json(suggestion);
-      if (url.includes("imdb.com/title") && url) {
+      if (url.startsWith("https://www.imdb.com/title")) {
+        seenPageHeaders.push(new Headers(init?.headers));
         return new Response(
           `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
           { status: 200 },
@@ -88,6 +93,13 @@ describe("IMDb metadata", () => {
     expect(metadata.tv_inventory?.season_count).toBe(5);
     expect(metadata.tv_inventory?.complete).toBeFalse();
     expect(metadata.unavailable_fields).toContain("titles.french");
+    expect(seenPageHeaders).toHaveLength(1);
+    expect(seenPageHeaders[0]?.get("accept")).toContain("text/html");
+    expect(seenPageHeaders[0]?.get("accept-language")).toBe("en-US,en;q=0.9");
+    expect(seenPageHeaders[0]?.get("user-agent")).toContain("Chrome/140.0.0.0");
+    expect(seenPageHeaders[0]?.get("sec-ch-ua-platform")).toBe('"Windows"');
+    expect(seenPageHeaders[0]?.get("sec-fetch-mode")).toBe("navigate");
+    expect(seenPageHeaders[0]?.get("referer")).toBe("https://www.imdb.com/");
   });
 
   test("falls back to a rendered IMDb page when direct pages are blocked", async () => {

@@ -405,9 +405,17 @@ const allowedGuids = new Set([
   "574e775e-4f2a-5b96-ac1e-a2962a402336",
 ]);
 
-function isAllowedGenericValue(category: string, value: string): boolean {
+function isAllowedGenericValue(
+  category: string,
+  value: string,
+  line: string,
+): boolean {
   if (category === "IPv4 address") {
-    return value === "0.0.0.0" || value === "127.0.0.1";
+    return (
+      value === "0.0.0.0" ||
+      value === "127.0.0.1" ||
+      line.includes(`Chrome/${value}`)
+    );
   }
 
   if (category === "Windows absolute path") {
@@ -466,7 +474,7 @@ function auditBlobs(repoRoot: string): void {
 
       for (const definition of patterns) {
         for (const match of line.matchAll(definition.pattern)) {
-          if (isAllowedGenericValue(definition.category, match[0])) {
+          if (isAllowedGenericValue(definition.category, match[0], line)) {
             continue;
           }
 

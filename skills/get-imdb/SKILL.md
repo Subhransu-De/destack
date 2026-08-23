@@ -75,7 +75,7 @@ If a torrent search needs episode completeness, stop and report the unavailable 
 
 The IMDb suggestion service supplies basic title data. This data usually includes the title, media type, year, cast summary, and image.
 
-The resolver also requests IMDb title pages. These pages can supply JSON-LD data for the plot, runtime, genres, rating, and credits.
+The resolver also requests IMDb title pages with a coherent Chrome navigation header profile. These pages can supply JSON-LD data for the plot, runtime, genres, rating, and credits.
 
 IMDb can block automated title-page requests. If IMDb blocks a page or does not expose the original title in JSON-LD, the resolver asks Jina Reader for the public IMDb page and reads only its explicit `Original title:` value. It reports both the direct page error and the reader status.
 
