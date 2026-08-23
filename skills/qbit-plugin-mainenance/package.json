@@ -1,5 +1,5 @@
 {
-  "name": "qbittorrent-search-plugin-maintenance-skill",
+  "name": "qbit-plugin-mainenance-skill",
   "private": true,
   "type": "module",
   "scripts": {

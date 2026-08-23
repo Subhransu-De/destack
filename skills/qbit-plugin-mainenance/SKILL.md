@@ -1,5 +1,5 @@
 ---
-name: qbittorrent-search-plugin-maintenance
+name: qbit-plugin-mainenance
 description: |
   Audit, update, install, repair, runtime-test, and safely remove qBittorrent search plugins through the qBittorrent WebAPI. Use when a user asks whether search plugins are current or working, wants unofficial plugins added, wants credential-dependent or broken plugins removed, asks to inspect plugin Python files for malicious or phone-home behavior, or wants plugin timeouts and parser errors diagnosed through qBittorrent rather than direct site probes. Do not use for ordinary torrent searching, download selection, transfer management, or general WebAPI documentation.
 ---

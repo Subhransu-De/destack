@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "qbittorrent-search-plugin-maintenance-skill",
+      "name": "qbit-plugin-mainenance-skill",
       "devDependencies": {
         "@types/bun": "1.3.14",
         "@types/node": "^26.2.0",
