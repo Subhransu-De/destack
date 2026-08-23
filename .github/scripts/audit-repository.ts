@@ -78,7 +78,9 @@ function auditPath(path: string): void {
     ![".gitignore", "AGENTS.md", "CLAUDE.md", "INSTALLATION.md"].includes(
       path,
     ) &&
-    !/^(\.github|\.zed|bash_setup|claude|skills|windows_terminal)\//.test(path)
+    !/^(\.github|\.zed|bash_setup|claude|mpv|skills|windows_terminal)\//.test(
+      path,
+    )
   ) {
     addFinding("Top-level scope violation", path, "-");
   }
@@ -408,6 +410,10 @@ const allowedGuids = new Set([
   "5d0ce597-fed8-5ebd-83f9-f7f99a099f10",
 ]);
 
+const allowedHighEntropyValues = new Set([
+  "com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url",
+]);
+
 function isAllowedGenericValue(
   category: string,
   value: string,
@@ -498,6 +504,7 @@ function auditBlobs(repoRoot: string): void {
         const candidate = match[0];
         if (
           allPathsAreBunLockfiles ||
+          allowedHighEntropyValues.has(candidate) ||
           candidate.endsWith("_8wekyb3d8bbwe") ||
           allowedGuids.has(candidate.replace(/[{}]/g, "").toLowerCase())
         ) {

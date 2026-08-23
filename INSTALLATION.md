@@ -1,6 +1,6 @@
 # Installation
 
-This guide tells you how to install the Windows Terminal and Git Bash settings from this repository.
+This guide tells you how to install the Windows Terminal, Git Bash, and MPV settings from this repository.
 
 ## Windows Terminal
 
@@ -223,3 +223,58 @@ Use these steps to restore a backup file:
 - `bash_setup/install.ps1` installs the startup files and helper scripts.
 
 The repository does not contain shell history, zoxide data, generated backup files, or application caches.
+
+## MPV
+
+### About the settings
+
+The installed MPV build loads these settings from an `mpv` folder beside `mpv.exe`.
+
+The folder contains these files:
+
+- `mpv.conf` contains playback, window, subtitle, online-video, GIF, and GPU settings.
+- `input.conf` contains menu, volume, subtitle, seek, playlist, aspect-ratio, and rotation keys.
+- `fonts.conf` contains the Fontconfig settings supplied with the installed build.
+- `LICENSE.quality-menu.md` contains the license for the quality-menu script.
+- `scripts/quality-menu.lua` adds video-format and audio-format menus for online media.
+- `script-opts/quality-menu.conf` contains the menu keys, style, columns, and sort order.
+
+The quality-menu script is version 4.2.1. The script comes from [mpv-quality-menu](https://github.com/christoph-heinrich/mpv-quality-menu) and uses the GPL-2.0-only license.
+
+### Requirements
+
+- MPV 0.39.0 or later
+- yt-dlp for online media and format menus
+- A Vulkan-capable NVIDIA GPU for the `nvidia-quality` profile
+
+### Install the MPV settings
+
+1. Close MPV.
+2. Open the folder that contains `mpv.exe`.
+3. If an `mpv` settings folder exists, create a backup of that folder.
+4. Create an `mpv` folder beside `mpv.exe`.
+5. Copy `fonts.conf`, `input.conf`, `mpv.conf`, `LICENSE.quality-menu.md`, `script-opts`, and `scripts` into the new folder.
+6. Start MPV.
+
+If your MPV build uses a different settings folder, copy the same files into that folder.
+
+If you use the `nvidia-quality` profile, replace `YOUR_NVIDIA_GPU_NAME` with the exact Vulkan device name. Then uncomment that line.
+
+Start that profile with this command:
+
+```powershell
+mpv.exe --profile=nvidia-quality <MEDIA_FILE>
+```
+
+### Main keys
+
+- `Shift+c` opens the chapter menu.
+- `Ctrl+f` opens the video-format menu.
+- `Ctrl+Alt+f` opens the audio-format menu.
+- The arrow keys seek or change the volume.
+- `Ctrl+MouseWheel` changes the subtitle size.
+- `p` and `n` select the previous or next playlist item.
+
+### Excluded data
+
+The backup does not contain `watch_later`, playback history, caches, logs, executables, media files, or updater files.
