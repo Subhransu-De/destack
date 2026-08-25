@@ -303,7 +303,7 @@ The settings include:
 - Disabled Git object compression
 - Windows long-path support
 - `main` as the default initial branch
-- A global ignore file for the Windows `nul` filename and a configurable private-file marker
+- A global ignore file for the Windows `nul` filename and the approved `.s.de` private-file patterns
 
 Credential-helper configuration is not included.
 
@@ -318,8 +318,7 @@ Git for Windows includes GPG and can install Git LFS. Confirm that `git`, `git l
 ### Prepare the Git configuration
 
 1. Open `git/.gitconfig` and replace `YOUR_NAME`, `YOUR_EMAIL`, and `YOUR_GPG_SIGNING_KEY` with the values for the destination system.
-2. Open `git/.gitignore_global` and replace `PRIVATE_MARKER` with the private filename marker you want Git to ignore.
-3. If you do not use signed commits, change `gpgsign = true` to `gpgsign = false` and remove the signing-key line.
+2. If you do not use signed commits, change `gpgsign = true` to `gpgsign = false` and remove the signing-key line.
 
 ### Install the Git configuration
 
