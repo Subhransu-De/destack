@@ -1,15 +1,16 @@
 # Claude Code
 
-Global configuration for [Claude Code](https://code.claude.com), containing user settings, global instructions, a keybinding override, and a custom status line.
+Global configuration for [Claude Code](https://code.claude.com), containing user settings, global instructions, a Codex CLI reference, a keybinding override, and a custom status line.
 
 ## What is included
 
 - Default model, fallback model, subagent model, and reasoning effort selection
-- `auto` permission mode with a custom environment, soft-deny, and hard-deny policy
+- Bypass-permissions mode, dangerous-mode prompt suppression, and an `autoMode` safety policy retained for optional auto-mode use
 - Extended thinking with thinking summaries shown
-- Auto-compaction, and a 10-year transcript retention period
+- Auto-compaction, disabled automatic memory, disabled Claude AI connectors, and a 10-year transcript retention period
 - Worktree defaults: `node_modules` and `.venv` symlinked, branched from a fresh base ref
 - Global instructions applied to every project
+- Imported guidance for running Codex CLI jobs and reviews in the background
 - `shift+enter` bound to submit in the chat view
 - A Bun-powered status line showing model, effort, service health, context window use, the 5-hour rate limit, path, Git branch, and session name
 
@@ -26,7 +27,7 @@ Copy the files into `~/.claude/`:
 
 ```bash
 mkdir -p ~/.claude
-cp CLAUDE.md settings.json keybindings.json statusline.ts ~/.claude/
+cp CLAUDE.md codex-cli.md settings.json keybindings.json statusline.ts ~/.claude/
 ```
 
 Back up an existing configuration first if you have one:
@@ -42,6 +43,7 @@ Restart Claude Code to load the new settings.
 ## Files
 
 - `CLAUDE.md`: global instructions and the local developer CLI inventory
+- `codex-cli.md`: imported instructions for non-interactive Codex CLI jobs and reviews
 - `settings.json`: models, permissions, `autoMode` policy, and status line
 - `keybindings.json`: chat submit binding
 - `statusline.ts`: status line script

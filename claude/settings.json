@@ -1,9 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "respectGitignore": true,
+  "cleanupPeriodDays": 3650,
   "env": {
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5"
@@ -14,20 +16,35 @@
   },
   "includeGitInstructions": true,
   "permissions": {
-    "defaultMode": "auto"
+    "defaultMode": "bypassPermissions"
   },
+  "model": "opus[1m]",
+  "fallbackModel": ["claude-sonnet-5"],
+  "enableAllProjectMcpServers": true,
+  "disableClaudeAiConnectors": true,
+  "worktree": {
+    "symlinkDirectories": ["node_modules", ".venv"],
+    "baseRef": "fresh"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bun ~/.claude/statusline.ts"
+  },
+  "spinnerTipsEnabled": true,
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "autoMemoryEnabled": false,
+  "showThinkingSummaries": true,
+  "skipDangerousModePermissionPrompt": true,
+  "autoCompactEnabled": true,
+  "fileCheckpointingEnabled": true,
+  "showTurnDuration": true,
+  "terminalProgressBarEnabled": true,
+  "teammateMode": "in-process",
+  "skipAutoPermissionPrompt": true,
   "autoMode": {
-    "environment": [
-      "$defaults",
-      "Windows 11 with Git Bash (POSIX sh) as the shell, not cmd.exe or PowerShell.",
-      "The aws CLI is authenticated against a real AWS account (profile: <aws-profile>). Commands hit live infrastructure, not a sandbox.",
-      "The gcloud CLI is authenticated against a real Google Cloud account. Commands hit live infrastructure.",
-      "The gh CLI is authenticated against a real GitHub account. It can create, modify, and merge pull requests on real repositories.",
-      "A local PostgreSQL instance is reachable via `psql -w -U postgres -d postgres`. Treat non-local database connections as production.",
-      "Git worktrees are created under ~/worktree/claude/."
-    ],
     "soft_deny": [
-      "$defaults",
       "Pushing commits, creating pull requests, or merging pull requests via git or gh.",
       "Any aws or gcloud command that creates, modifies, deletes, or disables cloud resources. Read-only describe/list/get commands are fine.",
       "DROP, TRUNCATE, DELETE, or ALTER statements run through psql against any database."
@@ -39,31 +56,15 @@
       "Deleting cloud infrastructure that holds state: S3 buckets, RDS instances, GCS buckets, Cloud SQL instances, or persistent disks.",
       "Disabling, weakening, or deleting audit logging, IAM policies, or security controls in AWS or Google Cloud."
     ],
+    "environment": [
+      "Windows 11 with Git Bash (POSIX sh) as the shell, not cmd.exe or PowerShell.",
+      "The aws CLI is authenticated against a real AWS account (profile: <aws-profile>). Commands hit live infrastructure, not a sandbox.",
+      "The gcloud CLI is authenticated against a real Google Cloud account. Commands hit live infrastructure.",
+      "The gh CLI is authenticated against a real GitHub account. It can create, modify, and merge pull requests on real repositories.",
+      "A local PostgreSQL instance is reachable via `psql -w -U postgres -d postgres`. Treat non-local database connections as production.",
+      "Git worktrees are created under ~/worktree/claude/."
+    ],
     "classifyAllShell": false
   },
-  "model": "claude-opus-5",
-  "fallbackModel": ["claude-sonnet-5"],
-  "autoCompactEnabled": true,
-  "enableAllProjectMcpServers": true,
-  "statusLine": {
-    "type": "command",
-    "command": "bun ~/.claude/statusline.ts"
-  },
-  "spinnerTipsEnabled": true,
-  "alwaysThinkingEnabled": true,
-  "showThinkingSummaries": true,
-  "effortLevel": "high",
-  "cleanupPeriodDays": 3650,
-  "autoUpdatesChannel": "latest",
-  "autoMemoryEnabled": true,
-  "skipAutoPermissionPrompt": true,
-  "fileCheckpointingEnabled": true,
-  "showTurnDuration": true,
-  "terminalProgressBarEnabled": true,
-  "worktree": {
-    "symlinkDirectories": ["node_modules", ".venv"],
-    "baseRef": "fresh"
-  },
-  "teammateMode": "in-process",
   "voiceEnabled": true
 }

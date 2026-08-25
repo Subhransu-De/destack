@@ -78,7 +78,7 @@ function auditPath(path: string): void {
     ![".gitignore", "AGENTS.md", "CLAUDE.md", "INSTALLATION.md"].includes(
       path,
     ) &&
-    !/^(\.github|\.zed|bash_setup|claude|mpv|skills|windows_terminal)\//.test(
+    !/^(\.github|\.zed|bash_setup|claude|codex|fastfetch|mpv|skills|windows_terminal)\//.test(
       path,
     )
   ) {
@@ -414,6 +414,15 @@ const allowedHighEntropyValues = new Set([
   "com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url",
 ]);
 
+const allowedBinaryPaths = new Set([
+  "fastfetch/tools/refs/durga-face.png",
+  "fastfetch/tools/refs/feluda.png",
+  "fastfetch/tools/refs/ferris-crab.png",
+  "fastfetch/tools/refs/professor-shonku.png",
+  "fastfetch/tools/refs/tagore-lineart.png",
+  "fastfetch/tools/refs/tagore.png",
+]);
+
 function isAllowedGenericValue(
   category: string,
   value: string,
@@ -431,6 +440,7 @@ function isAllowedGenericValue(
     return [
       /^C:[\\/]{1,2}config[\\/]{1,2}qBittorrent\.ini$/i,
       /^C:[\\/]{1,2}Downloads(?:[\\/]{1,2}Movies)?[\\/]{0,2}$/i,
+      /^C:[\\/]{1,2}Windows[\\/]{1,2}Fonts[\\/]{0,2}$/i,
       /^C:[\\/]{1,2}\.\.\.[\\/]{1,2}qbt_search_123\.json$/i,
     ].some((pattern) => pattern.test(value));
   }
@@ -451,9 +461,13 @@ function auditBlobs(repoRoot: string): void {
       paths.every((path) => path === ".github/dependabot.yml");
     const allPathsAreBunLockfiles =
       paths.length > 0 && paths.every((path) => path.endsWith("/bun.lock"));
+    const allPathsAreAllowedBinaries =
+      paths.length > 0 && paths.every((path) => allowedBinaryPaths.has(path));
 
     if (bytes.includes(0)) {
-      addFinding("Binary historical blob", displayPath, "-");
+      if (!allPathsAreAllowedBinaries) {
+        addFinding("Binary historical blob", displayPath, "-");
+      }
       continue;
     }
 

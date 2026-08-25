@@ -57,3 +57,7 @@ These day-to-day developer CLIs are installed and available for coding-agent wor
 - `ssh`, `scp`, `sftp` — remote access and file transfer.
 - `ffmpeg`, `ffprobe`, `MediaInfo`, `yt-dlp` — media download, conversion, probing, and metadata validation.
 - `playwright-cli` — local browser automation CLI (UA can be changed via `run-code` + `page.setExtraHTTPHeaders({ 'User-Agent': ... })`).
+
+# Imports
+
+@codex-cli.md
