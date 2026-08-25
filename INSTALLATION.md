@@ -1,6 +1,6 @@
 # Installation
 
-This guide tells you how to install the Codex, Claude Code, Windows Terminal, Git Bash, Fastfetch, and MPV settings from this repository.
+This guide tells you how to install the Codex, Claude Code, Zed, Windows Terminal, Git Bash, Fastfetch, and MPV settings from this repository.
 
 ## Repository security gates
 
@@ -143,6 +143,47 @@ The settings include:
 - `claude/keybindings.json` contains the chat submit binding.
 - `claude/statusline.ts` contains the custom status line.
 - `claude/README.md` documents the export boundaries and shell-based installation option.
+
+## Zed
+
+### About the settings
+
+Zed loads user configuration from `%APPDATA%\Zed` on Windows. The repository contains the authored user settings, key bindings, and global agent instructions while excluding account and runtime state.
+
+The settings include:
+
+- JetBrains key bindings with custom file-finder and close-item shortcuts
+- Catppuccin Mocha editor and icon themes with JetBrains Mono fonts
+- Ruff, Prettier, Google Java Format, and language-server formatting rules
+- Disabled telemetry, AI, and edit predictions
+- Automatic saving, trusted worktrees, and customized panel placement
+- Personal Zed agent instructions for concise Git commit messages
+
+### Requirements
+
+- Zed for Windows
+- JetBrains Mono
+- Catppuccin Mocha theme and icon-theme extensions
+- Ruff, Prettier, and Google Java Format for the configured external formatters
+
+### Install the Zed settings
+
+1. Close Zed.
+2. Open `%APPDATA%\Zed` in File Explorer.
+3. Back up any same-named `settings.json`, `keymap.json`, and `AGENTS.md` files.
+4. Copy those three files from the repository's `zed` folder into `%APPDATA%\Zed`.
+5. Start Zed.
+
+The source `themes` directory is empty, and no user tasks or snippets are currently configured.
+
+### Files
+
+- `zed/settings.json` contains editor, formatter, appearance, panel, terminal, telemetry, trust, and agent preferences.
+- `zed/keymap.json` contains workspace, editor, and pane key bindings.
+- `zed/AGENTS.md` contains personal instructions loaded by the Zed Agent.
+- `zed/README.md` documents the export boundaries and installation summary.
+
+The nested Git repository, `.gitignore`, configuration wiki and guide, installed extensions, account state, conversations, threads, databases, logs, crash-handler files, temporary files, language servers, external-agent state, and other generated runtime data are excluded.
 
 ## Windows Terminal
 
