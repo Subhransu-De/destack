@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
+import { createHash } from "node:crypto";
 import { networkInterfaces, userInfo } from "node:os";
 
-type Finding = {
+export type Finding = {
   category: string;
   path: string;
   line: string;
@@ -11,6 +12,14 @@ type Finding = {
 type PatternDefinition = {
   category: string;
   pattern: RegExp;
+};
+
+export type TextAuditOptions = {
+  allowEmail?: boolean;
+  allowedExactValues?: Set<string>;
+  allowBunLockfileEntropy?: boolean;
+  allowGitHubObjectIds?: boolean;
+  ignoredCategories?: Set<string>;
 };
 
 const decoder = new TextDecoder();
@@ -60,6 +69,21 @@ function getShannonEntropy(value: string): number {
   return entropy;
 }
 
+function isAllowedGitHubObjectReference(
+  candidate: string,
+  line: string,
+): boolean {
+  const normalizedCandidate = candidate.toLowerCase();
+  const referencedObjectIds = [
+    ...line.matchAll(
+      /(?:github\.com\/[^\s/]+\/[^\s/]+\/(?:commit|commits|blob|tree)\/|@)([0-9a-f]{40})(?![0-9a-f])/gi,
+    ),
+  ].map((match) => match[1].toLowerCase());
+  return referencedObjectIds.some((objectId) =>
+    normalizedCandidate.includes(objectId),
+  );
+}
+
 function splitLines(text: string): string[] {
   return text.split(/\r?\n/).filter((line) => line.length > 0);
 }
@@ -71,6 +95,13 @@ function addBlobPath(blobId: string, path: string): void {
     blobPaths.set(blobId, paths);
   }
   paths.add(path);
+}
+
+function isAllowedMode(mode: string, path: string): boolean {
+  return (
+    mode === "100644" ||
+    (mode === "100755" && path === ".github/hooks/pre-push")
+  );
 }
 
 function auditPath(path: string): void {
@@ -87,6 +118,22 @@ function auditPath(path: string): void {
 
   if (!/^[A-Za-z0-9._/-]+$/.test(path)) {
     addFinding("Unsafe or ambiguous filename", path, "-");
+  }
+
+  if (
+    /(^|\/)(?:node_modules|\.venv|venv|__pycache__|\.cache|\.pytest_cache|\.mypy_cache|\.tox|\.nox|coverage|dist|build|tmp|temp|sessions?|histories|logs?|backups?|appdata)(?:\/|$)/i.test(
+      path,
+    )
+  ) {
+    addFinding("Generated or private state path", path, "-");
+  }
+
+  if (
+    /(^|\/)(?:\.env(?:\..*)?|auth\.json|\.credentials\.json|credentials(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|known_hosts|.*\.(?:pem|p12|pfx|key|keystore|jks|kdbx|bak|backup))$/i.test(
+      path,
+    )
+  ) {
+    addFinding("Credential or backup filename", path, "-");
   }
 }
 
@@ -142,28 +189,85 @@ function auditStagedChanges(repoRoot: string): void {
     }
 
     const [, mode, blobId] = match;
-    if (mode !== "100644") {
+    if (!isAllowedMode(mode, path)) {
       addFinding(`Disallowed Git mode ${mode}`, path, "-");
     }
     addBlobPath(blobId, path);
   }
 }
 
+function getPublishableRefs(repoRoot: string): string[] {
+  const refs = splitLines(
+    runText(
+      [
+        "git",
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/heads",
+        "refs/remotes",
+        "refs/tags",
+        "refs/pull",
+      ],
+      repoRoot,
+    ),
+  ).filter(
+    (ref) =>
+      !ref.endsWith("/HEAD") &&
+      !ref.startsWith("refs/t3/") &&
+      !ref.startsWith("refs/audit/"),
+  );
+
+  if (
+    runText(["git", "rev-parse", "--verify", "HEAD^{commit}"], repoRoot, true)
+  ) {
+    refs.push("HEAD");
+  }
+
+  return [...new Set(refs)].sort();
+}
+
+function getIdentityHeader(
+  rawObject: string,
+  headerName: "author" | "committer" | "tagger",
+): { name: string; email: string; timezone: string } | null {
+  const header = new RegExp(
+    `^${headerName} (.+) <([^>]+)> \\d+ ([+-]\\d{4})\\r?$`,
+    "m",
+  ).exec(rawObject);
+  if (!header) {
+    return null;
+  }
+
+  return { name: header[1], email: header[2], timezone: header[3] };
+}
+
+function getObjectMessage(rawObject: string): string {
+  const separatorIndex = rawObject.indexOf("\n\n");
+  return separatorIndex === -1 ? "" : rawObject.slice(separatorIndex + 2);
+}
+
 function auditHistory(repoRoot: string): void {
+  const publishableRefs = getPublishableRefs(repoRoot);
+  if (publishableRefs.length === 0) {
+    throw new Error("No publishable refs were found.");
+  }
+
   const commitIds = splitLines(
-    runText(["git", "rev-list", "--all"], repoRoot),
+    runText(["git", "rev-list", ...publishableRefs], repoRoot),
   ).sort();
   if (commitIds.length === 0) {
     throw new Error("No reachable commits were found.");
   }
 
-  console.log(`Auditing ${commitIds.length} reachable commits...`);
+  console.log(
+    `Auditing ${commitIds.length} commits reachable from ${publishableRefs.length} publishable refs...`,
+  );
 
-  const allowedEmailPatterns = [
-    /^[0-9]+\+[^@]+@users\.noreply\.github\.com$/,
-    /^[^@]+@users\.noreply\.github\.com$/,
-    /^noreply@github\.com$/,
-  ];
+  const exactValues = getExactValues(repoRoot);
+  for (const ref of publishableRefs.filter((value) => value !== "HEAD")) {
+    auditTextContent(ref, ref, exactValues);
+  }
+
   const syntheticMergeCommitId =
     /^refs\/pull\/\d+\/merge$/.test(process.env.GITHUB_REF ?? "") &&
     process.env.GITHUB_SHA?.trim()
@@ -187,12 +291,9 @@ function auditHistory(repoRoot: string): void {
         addFinding("Embedded commit signature", commitId.slice(0, 12), "-");
       }
 
-      for (const headerName of ["author", "committer"]) {
-        const header = new RegExp(
-          `^${headerName} .+ <([^>]+)> \\d+ ([+-]\\d{4})\\r?$`,
-          "m",
-        ).exec(rawCommit);
-
+      const allowedExactValues = new Set<string>();
+      for (const headerName of ["author", "committer"] as const) {
+        const header = getIdentityHeader(rawCommit, headerName);
         if (!header) {
           addFinding(
             `Malformed ${headerName} metadata`,
@@ -202,15 +303,9 @@ function auditHistory(repoRoot: string): void {
           continue;
         }
 
-        const [, email, timezone] = header;
-        if (!allowedEmailPatterns.some((pattern) => pattern.test(email))) {
-          addFinding(
-            `Non-noreply ${headerName} email`,
-            commitId.slice(0, 12),
-            "-",
-          );
-        }
-        if (timezone !== "+0000") {
+        allowedExactValues.add(header.name.toLowerCase());
+        allowedExactValues.add(header.email.toLowerCase());
+        if (header.timezone !== "+0000") {
           addFinding(
             `Non-UTC ${headerName} timezone`,
             commitId.slice(0, 12),
@@ -218,6 +313,13 @@ function auditHistory(repoRoot: string): void {
           );
         }
       }
+
+      auditTextContent(
+        getObjectMessage(rawCommit),
+        `${commitId.slice(0, 12)} commit message`,
+        exactValues,
+        { allowEmail: true, allowedExactValues },
+      );
     }
 
     for (const entry of splitLines(
@@ -230,12 +332,59 @@ function auditHistory(repoRoot: string): void {
       }
 
       const [, mode, blobId, path] = match;
-      if (mode !== "100644") {
+      if (!isAllowedMode(mode, path)) {
         addFinding(`Disallowed Git mode ${mode}`, path, "-");
       }
       auditPath(path);
       addBlobPath(blobId, path);
     }
+  }
+
+  for (const entry of splitLines(
+    runText(
+      [
+        "git",
+        "for-each-ref",
+        "--format=%(objecttype)%09%(objectname)%09%(refname)",
+        "refs/tags",
+      ],
+      repoRoot,
+    ),
+  )) {
+    const [objectType, objectId, refName] = entry.split("\t");
+    if (objectType !== "tag") {
+      continue;
+    }
+
+    const rawTag = runText(["git", "cat-file", "tag", objectId], repoRoot);
+    if (
+      /^gpgsig /m.test(rawTag) ||
+      /-----BEGIN PGP SIGNATURE-----/.test(rawTag)
+    ) {
+      addFinding("Embedded tag signature", refName, "-");
+    }
+
+    const tagger = getIdentityHeader(rawTag, "tagger");
+    const allowedExactValues = new Set<string>();
+    if (!tagger) {
+      addFinding("Malformed tagger metadata", refName, "-");
+    } else {
+      allowedExactValues.add(tagger.name.toLowerCase());
+      allowedExactValues.add(tagger.email.toLowerCase());
+      if (tagger.timezone !== "+0000") {
+        addFinding("Non-UTC tagger timezone", refName, "-");
+      }
+    }
+
+    auditTextContent(
+      getObjectMessage(rawTag),
+      `${refName} tag message`,
+      exactValues,
+      {
+        allowEmail: true,
+        allowedExactValues,
+      },
+    );
   }
 }
 
@@ -368,6 +517,20 @@ const patterns: PatternDefinition[] = [
     pattern: /(?:^|[\s"'])\/(?:home|Users)\/[^\/\s"']+/gi,
   },
   {
+    category: "User-profile UNC or WSL path",
+    pattern:
+      /\\\\(?:wsl(?:\.localhost)?\\[^\s"'`]+|[A-Z0-9._-]+\\Users\\[^\\\s"'`]+(?:\\[^\s"'`]*)?)/gi,
+  },
+  {
+    category: "File URL",
+    pattern: /\bfile:\/{2,3}[^\s"'`]+/gi,
+  },
+  {
+    category: "Windows registry path",
+    pattern:
+      /\b(?:HKEY_(?:CLASSES_ROOT|CURRENT_USER|LOCAL_MACHINE|USERS|CURRENT_CONFIG)|HK(?:CR|CU|LM|U|CC))\\[^\s"'`]+/gi,
+  },
+  {
     category: "IPv4 address",
     pattern:
       /(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])/g,
@@ -375,6 +538,11 @@ const patterns: PatternDefinition[] = [
   {
     category: "MAC address",
     pattern: /\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/gi,
+  },
+  {
+    category: "IPv6 address",
+    pattern:
+      /(?<![0-9A-F:])(?=[0-9A-F:]*\d)(?:[0-9A-F]{0,4}:){3,7}[0-9A-F]{0,4}(?![0-9A-F:])/gi,
   },
   { category: "Windows SID", pattern: /\bS-1-(?:\d+-){1,14}\d+\b/g },
   {
@@ -402,6 +570,23 @@ const patterns: PatternDefinition[] = [
     category: "Credential in URL",
     pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:]+:[^\s/@]+@/gi,
   },
+  {
+    category: "Authorization bearer value",
+    pattern: /\bauthorization\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
+  },
+  {
+    category: "Cookie value",
+    pattern: /\b(?:cookie|set-cookie)\s*[:=]\s*[^\s;,=]+=[^\s;,]{12,}/gi,
+  },
+  {
+    category: "AWS ARN with account ID",
+    pattern: /\barn:(?:aws|aws-us-gov|aws-cn):[^\s:]*:[^\s:]*:\d{12}:[^\s]+/gi,
+  },
+  {
+    category: "Cloud or hardware identifier",
+    pattern:
+      /\b(?:account|project|subscription|tenant|machine|device|hardware|serial)[_-]?(?:id|guid|number)\s*[:=]\s*["']?[A-Za-z0-9][A-Za-z0-9._:-]{5,}/gi,
+  },
 ];
 
 const allowedGuids = new Set([
@@ -414,19 +599,54 @@ const allowedHighEntropyValues = new Set([
   "com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url",
 ]);
 
-const allowedBinaryPaths = new Set([
-  "fastfetch/tools/refs/durga-face.png",
-  "fastfetch/tools/refs/feluda.png",
-  "fastfetch/tools/refs/ferris-crab.png",
-  "fastfetch/tools/refs/professor-shonku.png",
-  "fastfetch/tools/refs/tagore-lineart.png",
-  "fastfetch/tools/refs/tagore.png",
+const allowedBinaryFiles = new Map([
+  [
+    "fastfetch/tools/refs/durga-face.png",
+    "c65481e80655a6525095dce3d1ec7662ba520037ffd9c470426f11e475734119",
+  ],
+  [
+    "fastfetch/tools/refs/feluda.png",
+    "23d7159adaf67ddb93dbeaadb54fb17124f46a09eb573b5437488eb63873c0e5",
+  ],
+  [
+    "fastfetch/tools/refs/ferris-crab.png",
+    "f4a4a5f50c7851ad9bf65e0e94baabc306db0d4fb3ee4aa647e3493f056326b6",
+  ],
+  [
+    "fastfetch/tools/refs/professor-shonku.png",
+    "33b70c7eb90418182e941e9047a045e07b01830496a71bd5389516d4455b20b3",
+  ],
+  [
+    "fastfetch/tools/refs/tagore-lineart.png",
+    "27164d96011460aa9e193d2c7c9d3411e62ade623a0d57897ee70d55aa1a09cc",
+  ],
+  [
+    "fastfetch/tools/refs/tagore.png",
+    "d51e0334fb374571e2cf78a5eeedeae823a15f212ad77de25e50ec137bb7a8e0",
+  ],
+]);
+
+const maximumBlobBytes = 5 * 1024 * 1024;
+const allowedPngChunkTypes = new Set([
+  "IHDR",
+  "PLTE",
+  "IDAT",
+  "IEND",
+  "tRNS",
+  "cHRM",
+  "gAMA",
+  "sRGB",
+  "bKGD",
+  "pHYs",
+  "sBIT",
+  "hIST",
 ]);
 
 function isAllowedGenericValue(
   category: string,
   value: string,
   line: string,
+  displayPath = "",
 ): boolean {
   if (category === "IPv4 address") {
     return (
@@ -445,7 +665,138 @@ function isAllowedGenericValue(
     ].some((pattern) => pattern.test(value));
   }
 
+  if (
+    category === "Windows registry path" &&
+    displayPath
+      .split(",")
+      .every((path) => path === ".github/scripts/audit-repository.ts")
+  ) {
+    return true;
+  }
+
   return false;
+}
+
+function auditTextContent(
+  content: string,
+  displayPath: string,
+  exactValues: string[],
+  options: TextAuditOptions = {},
+): void {
+  const normalizedAllowedExactValues = options.allowedExactValues ?? new Set();
+  const lowerContent = content.toLowerCase();
+
+  for (const value of exactValues) {
+    const normalizedValue = value.toLowerCase();
+    if (
+      !normalizedAllowedExactValues.has(normalizedValue) &&
+      lowerContent.includes(normalizedValue)
+    ) {
+      addFinding("Local or repository identifier", displayPath, "-");
+    }
+  }
+
+  const contentLines = content.split(/\r?\n/);
+  for (let lineIndex = 0; lineIndex < contentLines.length; lineIndex += 1) {
+    const line = contentLines[lineIndex];
+
+    for (const definition of patterns) {
+      if (
+        (options.allowEmail && definition.category === "Email address") ||
+        options.ignoredCategories?.has(definition.category)
+      ) {
+        continue;
+      }
+
+      for (const match of line.matchAll(definition.pattern)) {
+        if (
+          isAllowedGenericValue(
+            definition.category,
+            match[0],
+            line,
+            displayPath,
+          )
+        ) {
+          continue;
+        }
+
+        if (definition.category === "UUID or GUID") {
+          const normalizedGuid = match[0].replace(/[{}]/g, "").toLowerCase();
+          if (allowedGuids.has(normalizedGuid)) {
+            continue;
+          }
+        }
+
+        addFinding(definition.category, displayPath, String(lineIndex + 1));
+      }
+    }
+
+    if (options.ignoredCategories?.has("High-entropy value")) {
+      continue;
+    }
+
+    for (const match of line.matchAll(
+      /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{40,}(?![A-Za-z0-9+/_=-])/g,
+    )) {
+      const candidate = match[0];
+      if (
+        options.allowBunLockfileEntropy ||
+        (options.allowGitHubObjectIds &&
+          isAllowedGitHubObjectReference(candidate, line)) ||
+        allowedHighEntropyValues.has(candidate) ||
+        candidate.endsWith("_8wekyb3d8bbwe") ||
+        allowedGuids.has(candidate.replace(/[{}]/g, "").toLowerCase())
+      ) {
+        continue;
+      }
+
+      if (getShannonEntropy(candidate) >= 4.3) {
+        addFinding("High-entropy value", displayPath, String(lineIndex + 1));
+      }
+    }
+  }
+}
+
+function isMetadataFreePng(bytes: Uint8Array): boolean {
+  const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (!pngSignature.every((value, index) => bytes[index] === value)) {
+    return false;
+  }
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = pngSignature.length;
+  let sawHeader = false;
+  let sawEnd = false;
+
+  while (offset + 12 <= bytes.length) {
+    const chunkLength = view.getUint32(offset, false);
+    const chunkEnd = offset + 12 + chunkLength;
+    if (chunkEnd > bytes.length) {
+      return false;
+    }
+
+    const chunkType = decoder.decode(bytes.subarray(offset + 4, offset + 8));
+    if (!allowedPngChunkTypes.has(chunkType)) {
+      return false;
+    }
+    if (!sawHeader && chunkType !== "IHDR") {
+      return false;
+    }
+    if (chunkType === "IHDR") {
+      if (sawHeader || chunkLength !== 13) {
+        return false;
+      }
+      sawHeader = true;
+    }
+    if (chunkType === "IEND") {
+      sawEnd = true;
+      return chunkLength === 0 && chunkEnd === bytes.length;
+    }
+
+    offset = chunkEnd;
+  }
+
+  return sawHeader && sawEnd;
 }
 
 function auditBlobs(repoRoot: string): void {
@@ -461,12 +812,25 @@ function auditBlobs(repoRoot: string): void {
       paths.every((path) => path === ".github/dependabot.yml");
     const allPathsAreBunLockfiles =
       paths.length > 0 && paths.every((path) => path.endsWith("/bun.lock"));
-    const allPathsAreAllowedBinaries =
-      paths.length > 0 && paths.every((path) => allowedBinaryPaths.has(path));
+
+    if (bytes.length > maximumBlobBytes) {
+      addFinding("Oversized historical blob", displayPath, "-");
+      continue;
+    }
 
     if (bytes.includes(0)) {
-      if (!allPathsAreAllowedBinaries) {
+      const actualHash = createHash("sha256").update(bytes).digest("hex");
+      const expectedHashes = paths.map((path) => allowedBinaryFiles.get(path));
+      if (expectedHashes.some((hash) => !hash)) {
         addFinding("Binary historical blob", displayPath, "-");
+      } else if (expectedHashes.some((hash) => hash !== actualHash)) {
+        addFinding("Unapproved binary hash", displayPath, "-");
+      } else if (!isMetadataFreePng(bytes)) {
+        addFinding(
+          "Binary metadata or invalid PNG structure",
+          displayPath,
+          "-",
+        );
       }
       continue;
     }
@@ -479,6 +843,7 @@ function auditBlobs(repoRoot: string): void {
       continue;
     }
 
+    const filteredExactValues: string[] = [];
     for (const value of exactValues) {
       const pathContainsValue = displayPath
         .toLowerCase()
@@ -488,48 +853,19 @@ function auditBlobs(repoRoot: string): void {
         content.toLowerCase().includes(value.toLowerCase());
       if (pathContainsValue || contentContainsValue) {
         addFinding("Repository account identifier", displayPath, "-");
+      } else {
+        filteredExactValues.push(value);
       }
     }
 
-    const contentLines = content.split(/\r?\n/);
-    for (let lineIndex = 0; lineIndex < contentLines.length; lineIndex += 1) {
-      const line = contentLines[lineIndex];
-
-      for (const definition of patterns) {
-        for (const match of line.matchAll(definition.pattern)) {
-          if (isAllowedGenericValue(definition.category, match[0], line)) {
-            continue;
-          }
-
-          if (definition.category === "UUID or GUID") {
-            const normalizedGuid = match[0].replace(/[{}]/g, "").toLowerCase();
-            if (allowedGuids.has(normalizedGuid)) {
-              continue;
-            }
-          }
-
-          addFinding(definition.category, displayPath, String(lineIndex + 1));
-        }
-      }
-
-      for (const match of line.matchAll(
-        /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{40,}(?![A-Za-z0-9+/_=-])/g,
-      )) {
-        const candidate = match[0];
-        if (
-          allPathsAreBunLockfiles ||
-          allowedHighEntropyValues.has(candidate) ||
-          candidate.endsWith("_8wekyb3d8bbwe") ||
-          allowedGuids.has(candidate.replace(/[{}]/g, "").toLowerCase())
-        ) {
-          continue;
-        }
-
-        if (getShannonEntropy(candidate) >= 4.3) {
-          addFinding("High-entropy value", displayPath, String(lineIndex + 1));
-        }
-      }
-    }
+    auditTextContent(
+      content,
+      displayPath,
+      allPathsAreDependabotConfig ? [] : filteredExactValues,
+      {
+        allowBunLockfileEntropy: allPathsAreBunLockfiles,
+      },
+    );
   }
 }
 
@@ -576,9 +912,26 @@ function main(): void {
   console.log("No external scanning service was called.");
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
+export function getLocalExactValues(repoRoot: string): string[] {
+  return getExactValues(repoRoot);
+}
+
+export function findSensitiveText(
+  content: string,
+  displayPath: string,
+  exactValues: string[],
+  options: TextAuditOptions = {},
+): Finding[] {
+  const startingLength = findings.length;
+  auditTextContent(content, displayPath, exactValues, options);
+  return findings.splice(startingLength);
+}
+
+if (import.meta.main) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
 }

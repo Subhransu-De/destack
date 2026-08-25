@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * *"
 
 permissions:
   contents: read
@@ -61,7 +63,10 @@ jobs:
             --no-banner \
             --no-color \
             --redact=100 \
-            --log-opts="--all" \
+            --ignore-gitleaks-allow \
+            --max-archive-depth=3 \
+            --max-decode-depth=5 \
+            --log-opts="--branches --remotes --tags HEAD" \
             "${GITHUB_WORKSPACE}"
 
   sensitive-information:
@@ -79,6 +84,49 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      - name: Check out the trusted auditor for pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .trusted-security-auditor
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Audit pull request with the trusted default-branch auditor
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: bun "${GITHUB_WORKSPACE}/.trusted-security-auditor/.github/scripts/audit-repository.ts"
+
       - name: Audit commit metadata and every historical blob
+        if: github.event_name != 'pull_request'
         shell: bash
         run: bun ./.github/scripts/audit-repository.ts
+
+  github-surfaces:
+    name: GitHub publication surfaces
+    if: github.event_name != 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pages: read
+      pull-requests: read
+
+    steps:
+      - name: Check out all branches and tags
+        uses: actions/checkout@3d3c42e5aac5ba76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Audit GitHub publication surfaces and pull-request refs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun ./.github/scripts/audit-github-surfaces.ts

@@ -2,6 +2,61 @@
 
 This guide tells you how to install the Codex, Claude Code, Windows Terminal, Git Bash, Fastfetch, and MPV settings from this repository.
 
+## Repository security gates
+
+The repository includes a full-history pre-push security gate. It audits all local branches, remote-tracking branches, tags, pull-request refs, and `HEAD` before any push. Private T3 checkpoint refs are intentionally excluded because they are not publishable Git refs.
+
+The gate performs these checks:
+
+- Runs the custom sensitive-information audit against commit and tag metadata, messages, filenames, and every unique historical blob.
+- Runs Gitleaks against the complete publishable history with inline suppression disabled, recursive decoding enabled, and archive traversal to three levels.
+- Rejects generated state, credential filenames, unexpected binaries, oversized blobs, binary hash changes, and metadata-bearing PNG files.
+
+### Requirements
+
+- Bun
+- Gitleaks
+- Git Bash
+- GitHub CLI for the separate GitHub publication-surface audit
+
+### Install the pre-push gate
+
+Run this command once from the repository root:
+
+```bash
+git config core.hooksPath .github/hooks
+```
+
+Confirm the installed path:
+
+```bash
+git config --get core.hooksPath
+```
+
+The hook is fail-closed: pushes stop when Bun or Gitleaks is unavailable or when either audit reports a finding.
+
+### Run the audits manually
+
+Run the complete publishable-history audit:
+
+```bash
+bun ./.github/scripts/audit-repository.ts
+```
+
+Run the exact staged-blob audit:
+
+```bash
+bun ./.github/scripts/audit-repository.ts --staged
+```
+
+Run the GitHub publication-surface audit before changing repository visibility:
+
+```bash
+bun ./.github/scripts/audit-github-surfaces.ts
+```
+
+The publication-surface audit fetches pull-request head refs, reruns the repository audit, and checks repository metadata, issues, pull requests, comments, reviews, releases, Actions artifacts and logs, Actions variables, webhooks, deploy keys, and GitHub Pages. It prints finding categories and locations without printing matched secret or identifier values.
+
 ## Codex
 
 ### About the settings

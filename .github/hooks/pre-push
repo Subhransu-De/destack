@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Drain the ref update description supplied by Git. The security gates below
+# intentionally scan the complete publishable history instead of only the
+# outgoing range.
+cat >/dev/null
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if ! command -v bun >/dev/null 2>&1; then
+	printf '%s\n' 'Security gate failed: bun is required.' >&2
+	exit 1
+fi
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+	printf '%s\n' 'Security gate failed: gitleaks is required.' >&2
+	exit 1
+fi
+
+printf '%s\n' 'Running the full publishable-history sensitive-information audit...'
+bun ./.github/scripts/audit-repository.ts
+
+printf '%s\n' 'Running the full publishable-history Gitleaks audit...'
+gitleaks git \
+	--no-banner \
+	--no-color \
+	--redact=100 \
+	--ignore-gitleaks-allow \
+	--max-archive-depth=3 \
+	--max-decode-depth=5 \
+	--log-opts='--branches --remotes --tags HEAD' \
+	"$repo_root"
+
+printf '%s\n' 'Pre-push security gate passed.'

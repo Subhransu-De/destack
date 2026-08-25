@@ -2,3 +2,34 @@
 .ruff_cache/
 __pycache__/
 *.py[cod]
+
+# Generated dependency and environment folders
+**/node_modules/
+**/.venv/
+**/venv/
+**/.cache/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.tox/
+**/.nox/
+
+# Credentials, histories, state, and backups
+.env
+.env.*
+!.env.example
+auth.json
+.credentials.json
+credentials.*
+history*.jsonl
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pem
+*.p12
+*.pfx
+*.key
+*.keystore
+*.jks
+*.kdbx
+*.bak
+*.backup
