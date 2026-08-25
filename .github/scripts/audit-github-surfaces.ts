@@ -298,6 +298,7 @@ async function main(): Promise<void> {
   const variables = ghApi<{
     variables?: Array<{ name: string; value: string }>;
   }>(`repos/${repository}/actions/variables?per_page=100`, repoRoot, {
+    allowForbidden: true,
     allowNotFound: true,
   });
   for (const variable of variables?.variables ?? []) {
@@ -327,7 +328,7 @@ async function main(): Promise<void> {
   if ((deployKeys?.length ?? 0) > 0) {
     addFinding("Deploy keys require explicit identity audit", "deploy keys");
   }
-  if (hooks === null || deployKeys === null) {
+  if (variables === null || hooks === null || deployKeys === null) {
     console.log(
       "The workflow token cannot inspect one or more administrative surfaces; run this audit locally with an administrator token before publication changes.",
     );
