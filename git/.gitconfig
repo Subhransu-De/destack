@@ -1,0 +1,19 @@
+[user]
+	name = YOUR_NAME
+	email = YOUR_EMAIL
+	signingkey = YOUR_GPG_SIGNING_KEY
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[core]
+	compression = 0
+	excludesFile = ~/.gitignore_global
+	longpaths = true
+[init]
+	defaultBranch = main
+[commit]
+	gpgsign = true
+[gpg]
+	program = gpg

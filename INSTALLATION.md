@@ -1,6 +1,6 @@
 # Installation
 
-This guide tells you how to install the Codex, Claude Code, Zed, Windows Terminal, Git Bash, Fastfetch, and MPV settings from this repository.
+This guide tells you how to install the Codex, Claude Code, Zed, Windows Terminal, Git, Git Bash, Fastfetch, and MPV settings from this repository.
 
 ## Repository security gates
 
@@ -288,6 +288,53 @@ Start Windows Terminal after the installation or recovery is complete.
 - `windows_terminal/git-bash-integration.bash` reports the prompt and current folder to Windows Terminal.
 
 The repository does not contain runtime state, command history, generated backup files, or shell history.
+
+## Git
+
+### About the settings
+
+Git for Windows loads the global user configuration from `%USERPROFILE%\.gitconfig`. This configuration refers to `%USERPROFILE%\.gitignore_global` for global ignore patterns.
+
+The settings include:
+
+- Generic placeholders for the Git author name, email address, and GPG signing-key identifier
+- Automatic GPG signing for commits
+- Git LFS clean, smudge, and process filters
+- Disabled Git object compression
+- Windows long-path support
+- `main` as the default initial branch
+- A global ignore file for the Windows `nul` filename and a configurable private-file marker
+
+Credential-helper configuration is not included.
+
+### Requirements
+
+- Git for Windows
+- Git LFS
+- GPG and an existing signing key if commit signing remains enabled
+
+Git for Windows includes GPG and can install Git LFS. Confirm that `git`, `git lfs`, and `gpg` are available before installing this configuration.
+
+### Prepare the Git configuration
+
+1. Open `git/.gitconfig` and replace `YOUR_NAME`, `YOUR_EMAIL`, and `YOUR_GPG_SIGNING_KEY` with the values for the destination system.
+2. Open `git/.gitignore_global` and replace `PRIVATE_MARKER` with the private filename marker you want Git to ignore.
+3. If you do not use signed commits, change `gpgsign = true` to `gpgsign = false` and remove the signing-key line.
+
+### Install the Git configuration
+
+1. Close applications that may update the global Git configuration.
+2. Back up `%USERPROFILE%\.gitconfig` and `%USERPROFILE%\.gitignore_global` if they exist.
+3. Copy `git/.gitconfig` and `git/.gitignore_global` from this repository into `%USERPROFILE%`.
+4. Run `git config --global --list` and confirm that the installed values are correct.
+
+### Files
+
+- `git/.gitconfig` contains the portable global Git settings.
+- `git/.gitignore_global` contains the global ignore patterns.
+- `git/README.md` documents placeholders and export boundaries.
+
+The repository does not contain credential configuration, credentials, private keys, or machine-specific paths.
 
 ## Git Bash
 
