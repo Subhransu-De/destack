@@ -109,7 +109,7 @@ function auditPath(path: string): void {
     ![".gitignore", "AGENTS.md", "CLAUDE.md", "INSTALLATION.md"].includes(
       path,
     ) &&
-    !/^(\.github|\.zed|bash_setup|claude|codex|fastfetch|mpv|skills|windows_terminal|zed)\//.test(
+    !/^(\.github|\.zed|bash_setup|claude|codex|fastfetch|git|mpv|skills|windows_terminal|zed)\//.test(
       path,
     )
   ) {
