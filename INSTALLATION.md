@@ -155,6 +155,7 @@ The settings include:
 - JetBrains key bindings with custom file-finder and close-item shortcuts
 - Catppuccin Mocha editor and icon themes with JetBrains Mono fonts
 - Ruff, Prettier, Google Java Format, and language-server formatting rules
+- Automatic installation of the current Astro, theme, language, infrastructure, and utility extensions
 - Disabled telemetry, AI, and edit predictions
 - Automatic saving, trusted worktrees, and customized panel placement
 - Personal Zed agent instructions for concise Git commit messages
@@ -163,7 +164,7 @@ The settings include:
 
 - Zed for Windows
 - JetBrains Mono
-- Catppuccin Mocha theme and icon-theme extensions
+- Network access on first launch so Zed can install the declared extensions
 - Ruff, Prettier, and Google Java Format for the configured external formatters
 
 ### Install the Zed settings
@@ -178,12 +179,12 @@ The source `themes` directory is empty, and no user tasks or snippets are curren
 
 ### Files
 
-- `zed/settings.json` contains editor, formatter, appearance, panel, terminal, telemetry, trust, and agent preferences.
+- `zed/settings.json` contains editor, formatter, appearance, panel, terminal, telemetry, trust, agent preferences, and the declarative extension set.
 - `zed/keymap.json` contains workspace, editor, and pane key bindings.
 - `zed/AGENTS.md` contains personal instructions loaded by the Zed Agent.
 - `zed/README.md` documents the export boundaries and installation summary.
 
-The nested Git repository, `.gitignore`, configuration wiki and guide, installed extensions, account state, conversations, threads, databases, logs, crash-handler files, temporary files, language servers, external-agent state, and other generated runtime data are excluded.
+The nested Git repository, `.gitignore`, configuration wiki and guide, downloaded extension packages and extension work data, account state, conversations, threads, databases, logs, crash-handler files, temporary files, language servers, external-agent state, and other generated runtime data are excluded.
 
 ## Windows Terminal
 
