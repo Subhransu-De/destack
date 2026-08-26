@@ -301,7 +301,10 @@ The settings include:
 - Automatic GPG signing for commits
 - Git LFS clean, smudge, and process filters
 - Disabled Git object compression
+- Built-in file-system monitoring and the untracked-file cache
 - Windows long-path support
+- Automatic upstream setup on the first push of a new branch
+- `zdiff3` merge-conflict markers
 - `main` as the default initial branch
 - A global ignore file for the Windows `nul` filename and the approved `.s.de` private-file patterns
 

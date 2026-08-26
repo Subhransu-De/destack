@@ -10,10 +10,16 @@
 [core]
 	compression = 0
 	excludesFile = ~/.gitignore_global
+	fsmonitor = true
 	longpaths = true
+	untrackedCache = true
 [init]
 	defaultBranch = main
 [commit]
 	gpgsign = true
 [gpg]
 	program = gpg
+[push]
+	autoSetupRemote = true
+[merge]
+	conflictStyle = zdiff3

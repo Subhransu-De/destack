@@ -4,7 +4,7 @@ Portable global Git configuration for Windows, copied from the authored files un
 
 ## What is included
 
-- `.gitconfig`: identity placeholders, commit signing, Git LFS filters, compression, long-path support, the default branch, and the global excludes-file location
+- `.gitconfig`: identity placeholders, commit signing, Git LFS filters, compression, file-system monitoring, the untracked cache, long-path support, automatic upstream setup, enhanced conflict markers, the default branch, and the global excludes-file location
 - `.gitignore_global`: the Windows `nul` filename and the approved `.s.de` patterns for private files and folders
 
 ## Before installation
